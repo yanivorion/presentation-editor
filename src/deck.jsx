@@ -3,9 +3,10 @@ import { T, EASE, sysFont, glassPanel, glassBar, ctrlBase, Lbl, Field, Row, Sep,
          NumIn, TxtIn, TxtArea, Sel, Sw, TRow, TBtn, Acc, O } from './ui.jsx';
 import { SlideView, SLIDE_W, SLIDE_H, themePalette } from './templates.jsx';
 import { SEED_DECK } from './seed.js';
-import { entities } from './api/base44Client.js';
 
-const SAVE_DEBOUNCE_MS = 1200;
+const LS_KEY = 'deck_editor_v2';
+const loadDeck = () => { try { const r = localStorage.getItem(LS_KEY); if (r) return JSON.parse(r); } catch {} return null; };
+const saveDeck = (d) => { try { localStorage.setItem(LS_KEY, JSON.stringify(d)); } catch {} };
 
 // ─── Slide thumbnail in left rail ─────────────────────────────────────────────
 const Thumbnail = ({ slide, idx, total, active, onClick, onDelete, onDuplicate, scale = 0.15 }) => {
@@ -407,68 +408,16 @@ const PropertiesPanel = ({ slide, idx, total, onChange }) => {
 };
 
 // ─── Main editor ─────────────────────────────────────────────────────────────
-export default function DeckEditor({ user }) {
-  const [deck, setDeck] = useState(null);
-  const [recordId, setRecordId] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+export default function DeckEditor() {
+  const [deck, setDeck] = useState(() => loadDeck() || { title: SEED_DECK.title, slides: SEED_DECK.slides });
   const [active, setActive] = useState(0);
   const [present, setPresent] = useState(false);
   const [presentIdx, setPresentIdx] = useState(0);
   const canvasWrapRef = useRef(null);
   const [scale, setScale] = useState(0.6);
-  const saveTimer = useRef(null);
 
-  // Load deck from Base44 on mount
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const decks = await entities.Deck.list('-updated_date', 1);
-        if (cancelled) return;
-        if (decks.length > 0) {
-          const rec = decks[0];
-          setRecordId(rec.id);
-          setDeck({ title: rec.title, slides: rec.slides || [] });
-        } else {
-          const created = await entities.Deck.create({
-            title: SEED_DECK.title,
-            slides: SEED_DECK.slides,
-            is_seed: true,
-          });
-          if (cancelled) return;
-          setRecordId(created.id);
-          setDeck({ title: SEED_DECK.title, slides: SEED_DECK.slides });
-        }
-      } catch (err) {
-        console.error('Failed to load deck:', err);
-        setDeck({ title: SEED_DECK.title, slides: SEED_DECK.slides });
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  // Debounced save to Base44 whenever deck changes
-  useEffect(() => {
-    if (!deck || !recordId) return;
-    clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(async () => {
-      setSaving(true);
-      try {
-        await entities.Deck.update(recordId, {
-          title: deck.title,
-          slides: deck.slides,
-        });
-      } catch (err) {
-        console.error('Failed to save deck:', err);
-      } finally {
-        setSaving(false);
-      }
-    }, SAVE_DEBOUNCE_MS);
-    return () => clearTimeout(saveTimer.current);
-  }, [deck, recordId]);
+  // Persist to localStorage
+  useEffect(() => { saveDeck(deck); }, [deck]);
 
   const slides = deck?.slides || [];
   const cur = slides[active];
@@ -535,22 +484,10 @@ export default function DeckEditor({ user }) {
       return { ...d, slides:ss };
     });
   };
-  const resetDeck = async () => {
+  const resetDeck = () => {
     if (!confirm('Reset deck to seed (your edits will be lost)?')) return;
-    try {
-      const created = await entities.Deck.create({
-        title: SEED_DECK.title,
-        slides: SEED_DECK.slides,
-        is_seed: true,
-      });
-      setRecordId(created.id);
-      setDeck({ title: SEED_DECK.title, slides: SEED_DECK.slides });
-      setActive(0);
-    } catch (err) {
-      console.error('Failed to reset deck:', err);
-      setDeck({ title: SEED_DECK.title, slides: SEED_DECK.slides });
-      setActive(0);
-    }
+    setDeck({ title: SEED_DECK.title, slides: SEED_DECK.slides });
+    setActive(0);
   };
   const exportJson = () => {
     const blob = new Blob([JSON.stringify(deck, null, 2)], { type:'application/json' });
@@ -565,14 +502,10 @@ export default function DeckEditor({ user }) {
     inp.onchange = (e) => {
       const f = e.target.files?.[0]; if (!f) return;
       const reader = new FileReader();
-      reader.onload = async () => {
+      reader.onload = () => {
         try {
           const imported = JSON.parse(reader.result);
-          const title = imported.title || 'Imported Deck';
-          const slides = imported.slides || [];
-          const created = await entities.Deck.create({ title, slides });
-          setRecordId(created.id);
-          setDeck({ title, slides });
+          setDeck({ title: imported.title || 'Imported Deck', slides: imported.slides || [] });
           setActive(0);
         } catch {
           alert('Invalid JSON');
@@ -601,21 +534,6 @@ export default function DeckEditor({ user }) {
   const dragRef = useRef({ from:null });
 
   // ── Render ──
-  if (loading || !deck) {
-    return (
-      <div style={{
-        display:'flex', alignItems:'center', justifyContent:'center',
-        width:'100vw', height:'100vh',
-        background: T.deckBg, fontFamily: sysFont,
-      }}>
-        <div style={{
-          fontSize:13, fontWeight:600, letterSpacing:'.08em',
-          textTransform:'uppercase', color: T.text3,
-        }}>Loading deck…</div>
-      </div>
-    );
-  }
-
   if (present) {
     const ps = slides[presentIdx];
     return (
@@ -679,9 +597,6 @@ export default function DeckEditor({ user }) {
 
         <div style={{ flex:1 }}/>
 
-        {saving && (
-          <span style={{ fontSize:10, fontWeight:600, letterSpacing:'.08em', color:T.text3 }}>Saving…</span>
-        )}
         <TBtn onClick={importJson}>Import</TBtn>
         <TBtn onClick={exportJson}>Export JSON</TBtn>
         <TBtn onClick={resetDeck}>Reset</TBtn>
