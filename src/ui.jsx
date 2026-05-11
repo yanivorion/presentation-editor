@@ -350,6 +350,9 @@ export const O = {
     { v:'goalsGrid',          l:'Goals Grid (5-up)' },
     { v:'roadmap',            l:'Roadmap' },
     { v:'closing',            l:'Closing Quote' },
+    { v:'profileCard',         l:'Profile Card (whois)' },
+    { v:'levelGrid',           l:'Level Grid (3x2)' },
+    { v:'levelDetail',         l:'Level Detail (terminal)' },
   ],
   panelKind: [
     { v:'none',     l:'None' },

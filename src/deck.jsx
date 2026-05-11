@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { T, EASE, sysFont, glassPanel, glassBar, ctrlBase, Lbl, Field, Row, Sep,
          NumIn, TxtIn, TxtArea, Sel, Sw, TRow, TBtn, Acc, O } from './ui.jsx';
 import { SlideView, SLIDE_W, SLIDE_H, themePalette } from './templates.jsx';
-import { SEED_DECK } from './seed.js';
+import { SEED_DECK, ALL_DIRECTIONS } from './seed.js';
 
-const LS_KEY = 'deck_editor_v2';
+const LS_KEY = 'deck_editor_v3';
 const loadDeck = () => { try { const r = localStorage.getItem(LS_KEY); if (r) return JSON.parse(r); } catch {} return null; };
 const saveDeck = (d) => { try { localStorage.setItem(LS_KEY, JSON.stringify(d)); } catch {} };
 
@@ -397,6 +397,44 @@ const PropertiesPanel = ({ slide, idx, total, onChange }) => {
         </Section>
       )}
 
+      {/* Profile Card */}
+      {slide.template === 'profileCard' && (
+        <Section openSection={openSection} setOpenSection={setOpenSection} id="profile" num="03" title="Profile">
+          <Row><Field label="Terminal command"><TxtIn val={f.command || ''} onChange={v=>updField('command',v)}/></Field></Row>
+          <Row><Field label="Photo URL"><TxtIn val={f.photoSrc || ''} onChange={v=>updField('photoSrc',v)}/></Field></Row>
+          <Row><Field>
+            <div style={{ fontSize:11, color:T.text3, lineHeight:1.5 }}>
+              Edit quote and data rows directly on the slide canvas.
+            </div>
+          </Field></Row>
+        </Section>
+      )}
+
+      {/* Level Grid */}
+      {slide.template === 'levelGrid' && (
+        <Section openSection={openSection} setOpenSection={setOpenSection} id="levelgrid" num="03" title="Level Grid">
+          <Row><Field label="Terminal command"><TxtIn val={f.command || ''} onChange={v=>updField('command',v)}/></Field></Row>
+          <Row><Field>
+            <div style={{ fontSize:11, color:T.text3, lineHeight:1.5 }}>
+              Edit level titles, badges, and descriptions directly on the slide canvas.
+            </div>
+          </Field></Row>
+        </Section>
+      )}
+
+      {/* Level Detail */}
+      {slide.template === 'levelDetail' && (
+        <Section openSection={openSection} setOpenSection={setOpenSection} id="leveldetail" num="03" title="Level Detail">
+          <Row><Field label="Terminal command"><TxtIn val={f.command || ''} onChange={v=>updField('command',v)}/></Field></Row>
+          <Row><Field label="Diagnostic question"><TxtArea val={f.diagnostic || ''} onChange={v=>updField('diagnostic',v)} rows={3}/></Field></Row>
+          <Row><Field>
+            <div style={{ fontSize:11, color:T.text3, lineHeight:1.5 }}>
+              Edit left/right row labels and values directly on the slide canvas.
+            </div>
+          </Field></Row>
+        </Section>
+      )}
+
       <Section openSection={openSection} setOpenSection={setOpenSection} id="meta" num="04" title="Corner meta">
         <Row><Field label="Brand (top-left)"><TxtIn val={slide.meta?.brand || ''} onChange={v=>updMeta('brand',v)}/></Field></Row>
         <Row><Field label="Top-right"><TxtIn val={slide.meta?.tr || ''} onChange={v=>updMeta('tr',v)}/></Field></Row>
@@ -592,7 +630,29 @@ export default function DeckEditor() {
             fontSize:11, fontWeight:900,
           }}>H</span>
           <input value={deck.title} onChange={e=>setDeck(d=>({ ...d, title:e.target.value }))}
-            style={{ ...ctrlBase, height:28, width:320, fontSize:13, fontWeight:600 }}/>
+            style={{ ...ctrlBase, height:28, width:240, fontSize:13, fontWeight:600 }}/>
+        </div>
+
+        {/* Direction switcher */}
+        <div style={{ display:'flex', gap:4, marginLeft:8 }}>
+          {ALL_DIRECTIONS.map(dir => (
+            <button key={dir.key}
+              onClick={() => {
+                if (confirm(`Load "${dir.label}"? Current edits will be lost.`)) {
+                  setDeck({ title: dir.deck.title, slides: JSON.parse(JSON.stringify(dir.deck.slides)) });
+                  setActive(0);
+                }
+              }}
+              style={{
+                ...ctrlBase, width:'auto', height:26, padding:'0 10px',
+                fontSize:10, fontWeight:600, letterSpacing:'.04em', cursor:'pointer',
+                background: deck.title === dir.deck.title ? T.accent : T.ctrl,
+                color: deck.title === dir.deck.title ? '#fff' : T.text2,
+                border: deck.title === dir.deck.title ? `1px solid ${T.accent}` : `1px solid ${T.ctrlBorder}`,
+              }}>
+              {dir.label}
+            </button>
+          ))}
         </div>
 
         <div style={{ flex:1 }}/>

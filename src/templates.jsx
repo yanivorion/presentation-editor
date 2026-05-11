@@ -952,6 +952,183 @@ const TplFourColumnProcess = ({ slide, onChange, palette, editable }) => {
   );
 };
 
+// ─── Profile Card (whois style) ──────────────────────────────────────────────
+const TplProfileCard = ({ slide, onChange, palette, editable }) => {
+  const f = slide.fields || {};
+  const upd = (k, v) => onChange({ ...slide, fields: { ...f, [k]:v } });
+  const rows = f.rows || [];
+  const updRow = (i, k, v) => { const next = rows.slice(); next[i] = { ...next[i], [k]:v }; upd('rows', next); };
+  const bgCol = palette.bg === '#0a0a0a' ? '#0a0a0a' : '#f5f5f0';
+  return (
+    <div style={{ position:'absolute', inset:0, background:bgCol, fontFamily:"'Courier New', Courier, monospace" }}>
+      {/* Terminal command header */}
+      <div style={{ padding:'28px 40px 0' }}>
+        <Editable value={f.command || '$ whois speaker_name'} onChange={v=>upd('command',v)} editable={editable}
+          style={{ fontSize:18, fontWeight:700, color:'#2d6b2d', fontFamily:'inherit' }}/>
+      </div>
+      <div style={{ position:'absolute', top:56, left:40, right:40, height:1, background:'#2d6b2d', opacity:0.4 }}/>
+
+      <div style={{ position:'absolute', top:80, left:40, right:40, bottom:40, display:'grid', gridTemplateColumns:'180px 1fr', gap:32 }}>
+        {/* Left: Photo */}
+        <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+          <div style={{ width:160, height:180, background:'#ddd', border:'1px solid #999', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden' }}>
+            {f.photoSrc ? (
+              <img src={f.photoSrc} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
+            ) : (
+              <span style={{ fontSize:11, color:'#999', textTransform:'uppercase', letterSpacing:'.1em' }}>Photo</span>
+            )}
+          </div>
+        </div>
+
+        {/* Right: Quote + rows */}
+        <div style={{ display:'flex', flexDirection:'column', gap:0 }}>
+          {/* Quote */}
+          <Editable value={f.quote || '"Quote goes here."'} onChange={v=>upd('quote',v)} editable={editable} multiline
+            style={{ fontSize:18, fontStyle:'italic', fontWeight:400, lineHeight:1.4, color:'#1a1a1a', marginBottom:24, fontFamily:'inherit' }}/>
+
+          {/* Data rows */}
+          <div style={{ display:'flex', flexDirection:'column', gap:0 }}>
+            {rows.map((row, i) => (
+              <div key={i} style={{ display:'grid', gridTemplateColumns:'120px 1fr', borderTop:'1px solid #ccc', padding:'12px 0', alignItems:'baseline' }}>
+                <Editable value={row.label || 'LABEL'} onChange={v=>updRow(i,'label',v)} editable={editable}
+                  style={{ fontSize:11, fontWeight:400, letterSpacing:'.12em', textTransform:'uppercase', color:'#888', fontFamily:'inherit' }}/>
+                <div style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+                  <Editable value={row.value || 'Value'} onChange={v=>updRow(i,'value',v)} editable={editable} multiline
+                    style={{ fontSize:16, fontWeight: row.bold ? 700 : 400, color:'#1a1a1a', fontFamily:'inherit' }}/>
+                  {row.badge && (
+                    <span style={{ display:'inline-block', fontSize:10, fontWeight:700, letterSpacing:'.1em',
+                      padding:'4px 10px', background:'#f5d023', color:'#1a1a1a', fontFamily:'inherit' }}>
+                      {row.badge}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Level Grid (3x2 maturity overview) ──────────────────────────────────────
+const TplLevelGrid = ({ slide, onChange, palette, editable }) => {
+  const f = slide.fields || {};
+  const upd = (k, v) => onChange({ ...slide, fields: { ...f, [k]:v } });
+  const levels = f.levels || [];
+  const updLevel = (i, k, v) => { const next = levels.slice(); next[i] = { ...next[i], [k]:v }; upd('levels', next); };
+  const bgCol = palette.bg === '#0a0a0a' ? '#0a0a0a' : '#f5f5f0';
+  return (
+    <div style={{ position:'absolute', inset:0, background:bgCol, fontFamily:"'Courier New', Courier, monospace" }}>
+      {/* Terminal command header */}
+      <div style={{ padding:'28px 40px 0' }}>
+        <Editable value={f.command || '$ list --levels --all'} onChange={v=>upd('command',v)} editable={editable}
+          style={{ fontSize:18, fontWeight:700, color:'#2d6b2d', fontFamily:'inherit' }}/>
+      </div>
+      <div style={{ position:'absolute', top:56, left:40, right:40, height:1, background:'#2d6b2d', opacity:0.4 }}/>
+
+      {/* Grid */}
+      <div style={{ position:'absolute', top:80, left:40, right:40, bottom:40, display:'flex', flexDirection:'column', gap:0 }}>
+        {/* Top row (first 3) */}
+        <div style={{ flex:1, display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:0, borderTop:'1px solid #ccc', borderBottom:'1px solid #ccc' }}>
+          {levels.slice(0,3).map((lv, i) => (
+            <div key={i} style={{ padding:'24px 20px', borderRight: i < 2 ? '1px solid #ccc' : 'none', display:'flex', flexDirection:'column', gap:12 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                <Editable value={lv.id || `L${i}`} onChange={v=>updLevel(i,'id',v)} editable={editable}
+                  style={{ fontSize:13, color:'#888', fontFamily:'inherit' }}/>
+                {lv.badge && (
+                  <span style={{ fontSize:9, fontWeight:700, letterSpacing:'.08em', padding:'3px 8px',
+                    background:'#f5d023', color:'#1a1a1a', fontFamily:'inherit' }}>{lv.badge}</span>
+                )}
+              </div>
+              <Editable value={lv.title || 'Level Title'} onChange={v=>updLevel(i,'title',v)} editable={editable}
+                style={{ fontSize:20, fontWeight:700, color:'#1a1a1a', fontFamily:'inherit', lineHeight:1.2 }}/>
+              <Editable value={lv.desc || 'Description text.'} onChange={v=>updLevel(i,'desc',v)} editable={editable} multiline
+                style={{ fontSize:13, color:'#666', fontFamily:'inherit', lineHeight:1.5 }}/>
+            </div>
+          ))}
+        </div>
+        {/* Bottom row (next 3) */}
+        <div style={{ flex:1, display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:0, borderBottom:'1px solid #ccc' }}>
+          {levels.slice(3,6).map((lv, i) => (
+            <div key={i+3} style={{ padding:'24px 20px', borderRight: i < 2 ? '1px solid #ccc' : 'none', display:'flex', flexDirection:'column', gap:12 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                <Editable value={lv.id || `L${i+3}`} onChange={v=>updLevel(i+3,'id',v)} editable={editable}
+                  style={{ fontSize:13, color:'#888', fontFamily:'inherit' }}/>
+                {lv.badge && (
+                  <span style={{ fontSize:9, fontWeight:700, letterSpacing:'.08em', padding:'3px 8px',
+                    background:'#f5d023', color:'#1a1a1a', fontFamily:'inherit' }}>{lv.badge}</span>
+                )}
+              </div>
+              <Editable value={lv.title || 'Level Title'} onChange={v=>updLevel(i+3,'title',v)} editable={editable}
+                style={{ fontSize:20, fontWeight:700, color:'#1a1a1a', fontFamily:'inherit', lineHeight:1.2 }}/>
+              <Editable value={lv.desc || 'Description text.'} onChange={v=>updLevel(i+3,'desc',v)} editable={editable} multiline
+                style={{ fontSize:13, color:'#666', fontFamily:'inherit', lineHeight:1.5 }}/>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Level Detail (terminal-style two-column breakdown) ──────────────────────
+const TplLevelDetail = ({ slide, onChange, palette, editable }) => {
+  const f = slide.fields || {};
+  const upd = (k, v) => onChange({ ...slide, fields: { ...f, [k]:v } });
+  const bgCol = palette.bg === '#0a0a0a' ? '#0a0a0a' : '#f5f5f0';
+  const leftRows = f.leftRows || [];
+  const rightRows = f.rightRows || [];
+  const updLeft = (i, k, v) => { const next = leftRows.slice(); next[i] = { ...next[i], [k]:v }; upd('leftRows', next); };
+  const updRight = (i, k, v) => { const next = rightRows.slice(); next[i] = { ...next[i], [k]:v }; upd('rightRows', next); };
+
+  const RowBlock = ({ row, idx, updFn }) => (
+    <div style={{ borderTop:'1px solid #ccc', padding:'14px 0' }}>
+      <Editable value={row.label || 'LABEL'} onChange={v=>updFn(idx,'label',v)} editable={editable}
+        style={{ fontSize:11, letterSpacing:'.12em', textTransform:'uppercase', color:'#888', marginBottom:6, fontFamily:'inherit' }}/>
+      <Editable value={row.value || 'Content'} onChange={v=>updFn(idx,'value',v)} editable={editable} multiline
+        style={{ fontSize:15, fontWeight: row.bold ? 700 : 400, color:'#1a1a1a', fontFamily:'inherit', lineHeight:1.5 }}/>
+      {row.badge && (
+        <span style={{ display:'inline-block', marginTop:6, fontSize:9, fontWeight:700, letterSpacing:'.08em',
+          padding:'3px 8px', background:'#f5d023', color:'#1a1a1a', fontFamily:'inherit' }}>{row.badge}</span>
+      )}
+    </div>
+  );
+
+  return (
+    <div style={{ position:'absolute', inset:0, background:bgCol, fontFamily:"'Courier New', Courier, monospace" }}>
+      {/* Terminal command header */}
+      <div style={{ padding:'28px 40px 0' }}>
+        <Editable value={f.command || '$ describe --level 0'} onChange={v=>upd('command',v)} editable={editable}
+          style={{ fontSize:18, fontWeight:700, color:'#2d6b2d', fontFamily:'inherit' }}/>
+      </div>
+      <div style={{ position:'absolute', top:56, left:40, right:40, height:1, background:'#2d6b2d', opacity:0.4 }}/>
+
+      {/* Two columns */}
+      <div style={{ position:'absolute', top:80, left:40, right:40, bottom:40, display:'grid', gridTemplateColumns:'1fr 1fr', gap:48 }}>
+        {/* Left column */}
+        <div style={{ display:'flex', flexDirection:'column' }}>
+          {leftRows.map((row, i) => <RowBlock key={i} row={row} idx={i} updFn={updLeft}/>)}
+
+          {/* Diagnostic callout */}
+          {f.diagnostic && (
+            <div style={{ marginTop:'auto', background:'#f5d023', padding:20, borderRadius:0 }}>
+              <div style={{ fontSize:10, fontWeight:700, letterSpacing:'.12em', textTransform:'uppercase', color:'#1a1a1a', marginBottom:8, fontFamily:'inherit' }}>DIAGNOSTIC</div>
+              <Editable value={f.diagnostic} onChange={v=>upd('diagnostic',v)} editable={editable} multiline
+                style={{ fontSize:15, fontWeight:400, color:'#1a1a1a', fontFamily:'inherit', lineHeight:1.4 }}/>
+            </div>
+          )}
+        </div>
+
+        {/* Right column */}
+        <div style={{ display:'flex', flexDirection:'column' }}>
+          {rightRows.map((row, i) => <RowBlock key={i} row={row} idx={i} updFn={updRight}/>)}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Slide renderer ──────────────────────────────────────────────────────────
 export const TEMPLATES = {
   cover:              TplCover,
@@ -969,6 +1146,9 @@ export const TEMPLATES = {
   milestones:         TplMilestones,
   horizontalProcess:  TplHorizontalProcess,
   fourColumnProcess:  TplFourColumnProcess,
+  profileCard:        TplProfileCard,
+  levelGrid:          TplLevelGrid,
+  levelDetail:        TplLevelDetail,
 };
 
 export const SlideView = ({ slide, idx, total, onChange, editable = true, showMeta = true }) => {
