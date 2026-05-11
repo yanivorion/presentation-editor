@@ -1,0 +1,9 @@
+node_modules
+dist
+.DS_Store
+*.pdf
+deno.lock
+
+# Base44
+base44/.app.json*
+base44/.types/

@@ -1,0 +1,36 @@
+{
+  "name": "Deck",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Deck title"
+    },
+    "slides": {
+      "type": "array",
+      "description": "Ordered array of slide objects",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "theme": { "type": "string" },
+          "template": { "type": "string" },
+          "fields": { "type": "object" },
+          "meta": { "type": "object" }
+        }
+      }
+    },
+    "is_seed": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether this is the seed/default deck"
+    }
+  },
+  "required": ["title"],
+  "rls": {
+    "create": true,
+    "read": { "created_by": "{{user.email}}" },
+    "update": { "created_by": "{{user.email}}" },
+    "delete": { "created_by": "{{user.email}}" }
+  }
+}
