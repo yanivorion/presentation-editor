@@ -589,6 +589,314 @@ export const DIRECTION_C = {
   ],
 };
 
+// ─── Shared: Modern Profile slide ────────────────────────────────────────────
+const SLIDE_PROFILE_MODERN = slide({
+  template:'profileModern',
+  fields:{
+    role:'Co-founding Partner, Floodgate — pre-seed & seed VC',
+    name:'Ann Miura-Ko',
+    quote:'"AI-native is currently used as a binary when it should be a spectrum."',
+    insight:'A company where employees use ChatGPT to summarize meetings is not the same as one where AI agents query systems of record and take bounded action.',
+    tags:['Stanford PhD','Forbes "Most Powerful"','Lyft · Okta · Twitch','Floodgate'],
+  },
+  meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026' },
+});
+
+// ─── Helper: generate terminal-style level split slides ──────────────────────
+const terminalLevelSlides = (levelId, name, signal, desc, markers, tell, thirdLabel, thirdValue, diagnostic, badge) => [
+  slide({
+    template:'levelSectionTerminal',
+    fields:{
+      command:`$ describe --level ${levelId.replace('L','')}`,
+      levelId, sectionLabel:'OVERVIEW',
+      body:`${name}\n\n${signal}\n\n${desc}`,
+      variant: badge ? undefined : undefined,
+    },
+    meta:{ brand:'Editor Cluster', tr:`Level ${levelId}` },
+  }),
+  slide({
+    template:'levelSectionTerminal',
+    fields:{
+      command:`$ describe --level ${levelId.replace('L','')} --section markers`,
+      levelId, sectionLabel:'MARKERS', body:markers,
+    },
+    meta:{ brand:'Editor Cluster', tr:`${levelId} · Markers` },
+  }),
+  slide({
+    template:'levelSectionTerminal',
+    fields:{
+      command:`$ describe --level ${levelId.replace('L','')} --section tell`,
+      levelId, sectionLabel:'THE TELL', body:tell,
+    },
+    meta:{ brand:'Editor Cluster', tr:`${levelId} · The Tell` },
+  }),
+  slide({
+    template:'levelSectionTerminal',
+    fields:{
+      command:`$ describe --level ${levelId.replace('L','')} --section ${thirdLabel.toLowerCase().replace(/\s/g,'-')}`,
+      levelId, sectionLabel:thirdLabel, body:thirdValue,
+    },
+    meta:{ brand:'Editor Cluster', tr:`${levelId} · ${thirdLabel}` },
+  }),
+  slide({
+    template:'levelSectionTerminal',
+    fields:{
+      command:`$ diagnose --level ${levelId.replace('L','')}`,
+      levelId, sectionLabel:'DIAGNOSTIC', body:diagnostic, variant:'diagnostic',
+    },
+    meta:{ brand:'Editor Cluster', tr:`${levelId} · Diagnostic` },
+  }),
+];
+
+// ─── Helper: generate modern-style level split slides ────────────────────────
+const modernLevelSlides = (levelId, name, signal, markers, tell, thirdLabel, thirdValue, diagnostic, badge) => [
+  slide({
+    template:'levelIntro',
+    fields:{ levelId, name, signal, badge: badge || undefined },
+    meta:{ brand:'Editor Cluster', tr:`Level ${levelId}` },
+  }),
+  slide({
+    theme:'gray', template:'levelSection',
+    fields:{ levelId, sectionLabel:'MARKERS', body:markers },
+    meta:{ brand:'Editor Cluster', tr:`${levelId} · Markers` },
+  }),
+  slide({
+    template:'levelSection',
+    fields:{ levelId, sectionLabel:'THE TELL', body:tell },
+    meta:{ brand:'Editor Cluster', tr:`${levelId} · The Tell` },
+  }),
+  slide({
+    theme:'gray', template:'levelSection',
+    fields:{ levelId, sectionLabel:thirdLabel, body:thirdValue },
+    meta:{ brand:'Editor Cluster', tr:`${levelId} · ${thirdLabel}` },
+  }),
+  slide({
+    template:'levelSection',
+    fields:{ levelId, sectionLabel:'DIAGNOSTIC', body:diagnostic, variant:'diagnostic' },
+    meta:{ brand:'Editor Cluster', tr:`${levelId} · Diagnostic` },
+  }),
+];
+
+// Level data
+const LEVELS_DATA = [
+  {
+    id:'L0', name:'AI as Theater', badge:null,
+    signal:'Tools exist. Nothing changes.',
+    desc:'AI tools are present but don\'t complete any business process end-to-end. Adoption is performative — announcements, pilots, demos — but no workflow has actually changed.',
+    markers:'AI in strategy decks but absent from daily work. Pilots never graduate to production.',
+    tell:'No process removed or replaced. Headcount unchanged. AI is a line item, not an operating change.',
+    thirdLabel:"WHO'S HERE", thirdValue:'Most large enterprises that announced "AI strategies" in 2023-2024 but haven\'t changed how any team works.',
+    diagnostic:'"If we turned off every AI tool tomorrow, would anyone\'s job change?"',
+  },
+  {
+    id:'L1', name:'Personal Productivity', badge:'MOST ORGS',
+    signal:"Individuals use AI. The org doesn't.",
+    desc:"Individuals adopt AI independently — drafting, summarizing, coding. Gains are real but isolated. No shared tooling, no process change. Each person's AI usage is invisible to the system.",
+    markers:'Engineers use Copilot. PMs use ChatGPT. Designers use Midjourney. None of it coordinated or measured.',
+    tell:'If one person leaves, their AI workflows leave with them. Nothing documented, shared, or institutionalized.',
+    thirdLabel:'THE TRAP', thirdValue:'This is where most companies claiming "AI-forward" sit. Individual tool use masquerades as transformation.',
+    diagnostic:'"Is AI usage an individual habit or an organizational capability?"',
+  },
+  {
+    id:'L2', name:'Team Workflow', badge:null,
+    signal:'Teams share AI processes — within their walls.',
+    desc:"Teams have shared AI tools and processes within functional boundaries. Engineering has its pipeline, marketing has its workflow. Real gains — but workflows don't cross teams.",
+    markers:'Standardized AI toolchains within teams. Shared prompts, templates, pipelines. Team-level metrics improve.',
+    tell:'Cross-team handoffs are still manual. Data flows through meetings, tickets, docs — not integrated AI systems.',
+    thirdLabel:'THE WALL', thirdValue:'L2→L3 is the hardest jump. Requires shared data models, integrated systems of record, cross-team trust in AI actions.',
+    diagnostic:'"Can an AI workflow in one team trigger or feed a workflow in another?"',
+  },
+  {
+    id:'L3', name:'Organizational Infrastructure', badge:'INFLECTION',
+    signal:'AI acts across functions. The org chart changes.',
+    desc:'AI agents act across integrated systems and functions. Non-engineers create shareable workflows. Layers compress, roles merge, new functions emerge. The org chart visibly changes.',
+    markers:'Fewer management layers. AI agents query systems of record and take bounded action. Non-engineers build workflows.',
+    tell:'Roles that coordinated between teams replaced by AI-powered systems. Builder-to-manager ratio shifts dramatically.',
+    thirdLabel:'INFLECTION', thirdValue:'AI stops being a tool and starts being infrastructure. The organization is structurally different than before.',
+    diagnostic:'"Has your org chart changed because of AI — not just your tool stack?"',
+  },
+  {
+    id:'L4', name:'Compounding OS', badge:null,
+    signal:'AI learns from past runs. The system improves itself.',
+    desc:'AI workflows learn from their own execution history. Non-engineers ship production tools. Hierarchy flattens because coordination is automated.',
+    markers:'Self-improving pipelines. Internal tools built by non-engineers go to production. Feedback loops are automated.',
+    tell:'The system gets better without anyone explicitly improving it. Past outputs become training data for future runs.',
+    thirdLabel:'REQUIREMENT', thirdValue:'Robust observability, automated evaluation, trust in AI-generated improvements. Cultural comfort with machine-driven iteration.',
+    diagnostic:'"Does our AI get better at its job without us manually improving it?"',
+  },
+  {
+    id:'L5', name:'Self-Driving', badge:null,
+    signal:'Autonomous operating loops. Humans govern strategy.',
+    desc:'AI systems run autonomous operating loops end-to-end. Humans set strategy, define constraints, handle exceptions. The organization operates more like a fleet than a factory.',
+    markers:'Entire business processes run autonomously. Human intervention is exception-based, not routine.',
+    tell:'Removing a person doesn\'t break a process — it removes a strategic voice. Operations continue autonomously.',
+    thirdLabel:'REQUIREMENT', thirdValue:'Extreme trust, robust guardrails, cultural maturity. Very few orgs will reach this in the near term.',
+    diagnostic:'"If leadership took a month off, would operations degrade or continue?"',
+  },
+];
+
+// ─── DIRECTION D: Terminal style, split per section ──────────────────────────
+export const DIRECTION_D = {
+  id: 'deck_direction_d',
+  title: 'Direction D — Terminal Split',
+  slides: [
+    // Cover
+    slide({
+      theme:'black', template:'cover',
+      fields:{
+        eyebrow:'Editor Cluster · All-Hands · May 2026',
+        num:'',
+        title:'AI Maturity<br/>Levels.',
+        blurb:'L0 through L5. Each level broken down: signal, markers, tell, and diagnostic. Terminal style.',
+        tag:'Internal · Deep Dive',
+      },
+      meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026', bl:'Direction D: Terminal Split' },
+    }),
+
+    // Profile (modern)
+    SLIDE_PROFILE_MODERN,
+
+    // Level Grid overview
+    SLIDE_LEVEL_GRID,
+
+    // L0 (5 slides)
+    ...terminalLevelSlides('L0', 'AI as Theater', LEVELS_DATA[0].signal, LEVELS_DATA[0].desc, LEVELS_DATA[0].markers, LEVELS_DATA[0].tell, LEVELS_DATA[0].thirdLabel, LEVELS_DATA[0].thirdValue, LEVELS_DATA[0].diagnostic),
+
+    // L1 (5 slides)
+    ...terminalLevelSlides('L1', 'Personal Productivity', LEVELS_DATA[1].signal, LEVELS_DATA[1].desc, LEVELS_DATA[1].markers, LEVELS_DATA[1].tell, LEVELS_DATA[1].thirdLabel, LEVELS_DATA[1].thirdValue, LEVELS_DATA[1].diagnostic),
+
+    // L2 (5 slides)
+    ...terminalLevelSlides('L2', 'Team Workflow', LEVELS_DATA[2].signal, LEVELS_DATA[2].desc, LEVELS_DATA[2].markers, LEVELS_DATA[2].tell, LEVELS_DATA[2].thirdLabel, LEVELS_DATA[2].thirdValue, LEVELS_DATA[2].diagnostic),
+
+    // Wall divider
+    slide({
+      theme:'yellow', template:'sectionDivider',
+      fields:{ num:'!!', title:'The Wall.<br/>L2 → L3.', body:'This is the hardest jump. Most organizations stall here permanently.' },
+      meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026', bl:'Inflection point' },
+    }),
+
+    // L3 (5 slides)
+    ...terminalLevelSlides('L3', 'Organizational Infrastructure', LEVELS_DATA[3].signal, LEVELS_DATA[3].desc, LEVELS_DATA[3].markers, LEVELS_DATA[3].tell, LEVELS_DATA[3].thirdLabel, LEVELS_DATA[3].thirdValue, LEVELS_DATA[3].diagnostic),
+
+    // L4 (5 slides)
+    ...terminalLevelSlides('L4', 'Compounding OS', LEVELS_DATA[4].signal, LEVELS_DATA[4].desc, LEVELS_DATA[4].markers, LEVELS_DATA[4].tell, LEVELS_DATA[4].thirdLabel, LEVELS_DATA[4].thirdValue, LEVELS_DATA[4].diagnostic),
+
+    // L5 (5 slides)
+    ...terminalLevelSlides('L5', 'Self-Driving', LEVELS_DATA[5].signal, LEVELS_DATA[5].desc, LEVELS_DATA[5].markers, LEVELS_DATA[5].tell, LEVELS_DATA[5].thirdLabel, LEVELS_DATA[5].thirdValue, LEVELS_DATA[5].diagnostic),
+
+    // Where we are
+    slide({
+      template:'twoColumn',
+      fields:{
+        eyebrow:'Self-assessment',
+        bigNumeral:'L2',
+        title:'Where are<br/>we today?',
+        titleSize:56,
+        body:'Solid L2 with seeds of L3. Team-level AI that works — but stops at team walls. The jump is available but not automatic.',
+        panel:{ kind:'accent', data:{ tone:'yellow', eyebrow:'Position', statement:'L2 → L3 is our next move.', tag:'Current' }},
+      },
+      meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026' },
+    }),
+
+    // Closing
+    slide({
+      template:'closing',
+      fields:{
+        eyebrow:'The move',
+        quote:'One cross-team AI workflow. Pilot it. Prove L3 is possible here.',
+        footEyebrow:'Next',
+        footLine:'Identify → pilot → prove → expand.',
+        tag:'Editor Cluster · 2026',
+      },
+      meta:{ brand:'Editor Cluster', tr:'End.', bl:'All-Hands · 05-2026' },
+    }),
+  ],
+};
+
+// ─── DIRECTION E: Modern clean, split per section ────────────────────────────
+export const DIRECTION_E = {
+  id: 'deck_direction_e',
+  title: 'Direction E — Modern Split',
+  slides: [
+    // Cover
+    slide({
+      theme:'black', template:'cover',
+      fields:{
+        eyebrow:'Editor Cluster · All-Hands · May 2026',
+        num:'',
+        title:'AI Maturity<br/>Levels.',
+        blurb:'From theater to self-driving. Each level explored one dimension at a time. Clean, focused, one idea per slide.',
+        tag:'Internal · Deep Dive',
+      },
+      meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026', bl:'Direction E: Modern Split' },
+    }),
+
+    // Profile (modern)
+    SLIDE_PROFILE_MODERN,
+
+    // Level Grid overview
+    SLIDE_LEVEL_GRID,
+
+    // L0 (5 slides)
+    ...modernLevelSlides('L0', 'AI as Theater', LEVELS_DATA[0].signal, LEVELS_DATA[0].markers, LEVELS_DATA[0].tell, LEVELS_DATA[0].thirdLabel, LEVELS_DATA[0].thirdValue, LEVELS_DATA[0].diagnostic),
+
+    // L1 (5 slides)
+    ...modernLevelSlides('L1', 'Personal Productivity', LEVELS_DATA[1].signal, LEVELS_DATA[1].markers, LEVELS_DATA[1].tell, LEVELS_DATA[1].thirdLabel, LEVELS_DATA[1].thirdValue, LEVELS_DATA[1].diagnostic, LEVELS_DATA[1].badge),
+
+    // L2 (5 slides)
+    ...modernLevelSlides('L2', 'Team Workflow', LEVELS_DATA[2].signal, LEVELS_DATA[2].markers, LEVELS_DATA[2].tell, LEVELS_DATA[2].thirdLabel, LEVELS_DATA[2].thirdValue, LEVELS_DATA[2].diagnostic),
+
+    // Wall divider
+    slide({
+      theme:'yellow', template:'sectionDivider',
+      fields:{ num:'→', title:'The Wall.<br/>L2 to L3.', body:'The hardest jump. Requires shared data models, integrated systems of record, and cross-team trust in AI actions.' },
+      meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026', bl:'Inflection' },
+    }),
+
+    // L3 (5 slides)
+    ...modernLevelSlides('L3', 'Organizational Infrastructure', LEVELS_DATA[3].signal, LEVELS_DATA[3].markers, LEVELS_DATA[3].tell, LEVELS_DATA[3].thirdLabel, LEVELS_DATA[3].thirdValue, LEVELS_DATA[3].diagnostic, LEVELS_DATA[3].badge),
+
+    // L4 (5 slides)
+    ...modernLevelSlides('L4', 'Compounding OS', LEVELS_DATA[4].signal, LEVELS_DATA[4].markers, LEVELS_DATA[4].tell, LEVELS_DATA[4].thirdLabel, LEVELS_DATA[4].thirdValue, LEVELS_DATA[4].diagnostic),
+
+    // L5 (5 slides)
+    ...modernLevelSlides('L5', 'Self-Driving', LEVELS_DATA[5].signal, LEVELS_DATA[5].markers, LEVELS_DATA[5].tell, LEVELS_DATA[5].thirdLabel, LEVELS_DATA[5].thirdValue, LEVELS_DATA[5].diagnostic),
+
+    // Where we are
+    slide({
+      template:'twoColumn',
+      fields:{
+        eyebrow:'Self-assessment',
+        bigNumeral:'L2',
+        title:'Where are<br/>we today?',
+        titleSize:56,
+        body:'Solid L2 with seeds of L3. Team-level AI that works — but stops at team walls.',
+        panel:{ kind:'accent', data:{ tone:'yellow', eyebrow:'Position', statement:'The jump to L3 is our next move.', tag:'Current state' }},
+      },
+      meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026' },
+    }),
+
+    // Evidence
+    SLIDE_CLUSTER,
+
+    // People
+    SLIDE_PEOPLE,
+
+    // Closing
+    slide({
+      template:'closing',
+      fields:{
+        eyebrow:'One move',
+        quote:'Pick one workflow that crosses team boundaries. Build it with AI. Prove L3 is possible here.',
+        footEyebrow:'Action',
+        footLine:'Identify → pilot → prove → expand.',
+        tag:'Editor Cluster · 2026',
+      },
+      meta:{ brand:'Editor Cluster', tr:'End.', bl:'All-Hands · 05-2026' },
+    }),
+  ],
+};
+
 // Default export for backwards compatibility
 export const SEED_DECK = DIRECTION_A;
 
@@ -596,4 +904,6 @@ export const ALL_DIRECTIONS = [
   { key:'directionA', label:'A — The Ladder', deck:DIRECTION_A },
   { key:'directionB', label:'B — Mirror, then Model', deck:DIRECTION_B },
   { key:'directionC', label:'C — The Diagnostic', deck:DIRECTION_C },
+  { key:'directionD', label:'D — Terminal Split', deck:DIRECTION_D },
+  { key:'directionE', label:'E — Modern Split', deck:DIRECTION_E },
 ];

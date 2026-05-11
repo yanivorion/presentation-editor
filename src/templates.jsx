@@ -1129,6 +1129,131 @@ const TplLevelDetail = ({ slide, onChange, palette, editable }) => {
   );
 };
 
+// ─── Profile Modern (clean typography, no terminal) ──────────────────────────
+const TplProfileModern = ({ slide, onChange, palette, editable }) => {
+  const f = slide.fields || {};
+  const upd = (k, v) => onChange({ ...slide, fields: { ...f, [k]:v } });
+  const tags = f.tags || [];
+  return (
+    <div style={{ position:'absolute', inset:'72px 40px', display:'flex', flexDirection:'column', justifyContent:'space-between' }}>
+      {/* Top: role eyebrow + name */}
+      <div>
+        <Editable value={f.role || 'Role & Company'} onChange={v=>upd('role',v)} editable={editable}
+          style={{ fontSize:14, fontWeight:600, letterSpacing:'.14em', textTransform:'uppercase', color:palette.muted, marginBottom:12 }}/>
+        <Editable value={f.name || 'Speaker Name'} onChange={v=>upd('name',v)} editable={editable}
+          style={{ fontSize:64, fontWeight:700, letterSpacing:'-0.03em', lineHeight:1, color:palette.ink }}/>
+      </div>
+
+      {/* Middle: hero quote */}
+      <Editable value={f.quote || '"A compelling quote goes here."'} onChange={v=>upd('quote',v)} editable={editable} multiline
+        style={{ fontSize:36, fontWeight:400, fontStyle:'italic', lineHeight:1.3, color:palette.ink, maxWidth:'80%' }}/>
+
+      {/* Bottom: key insight callout + credential tags */}
+      <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+        {f.insight && (
+          <div style={{ borderLeft:'4px solid #f5d023', paddingLeft:20 }}>
+            <Editable value={f.insight} onChange={v=>upd('insight',v)} editable={editable} multiline
+              style={{ fontSize:18, fontWeight:600, lineHeight:1.4, color:palette.ink }}/>
+          </div>
+        )}
+        <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+          {tags.map((tag, i) => (
+            <Editable key={i} value={tag} onChange={v=>{ const next = tags.slice(); next[i]=v; upd('tags',next); }} editable={editable}
+              style={{ display:'inline-block', fontSize:11, fontWeight:600, letterSpacing:'.08em', textTransform:'uppercase',
+                padding:'6px 12px', border:`1px solid ${palette.ink}`, borderRadius:999, color:palette.ink }}/>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Level Intro (big number + name, section opener) ─────────────────────────
+const TplLevelIntro = ({ slide, onChange, palette, editable }) => {
+  const f = slide.fields || {};
+  const upd = (k, v) => onChange({ ...slide, fields: { ...f, [k]:v } });
+  return (
+    <div style={{ position:'absolute', inset:'72px 40px', display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'flex-start' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:16 }}>
+        <Editable value={f.levelId || 'L0'} onChange={v=>upd('levelId',v)} editable={editable}
+          style={{ fontSize:180, fontWeight:500, letterSpacing:'-0.04em', lineHeight:0.85, color:palette.ink }}/>
+        {f.badge && (
+          <span style={{ fontSize:12, fontWeight:700, letterSpacing:'.1em', padding:'6px 14px',
+            background:'#f5d023', color:'#1a1a1a' }}>{f.badge}</span>
+        )}
+      </div>
+      <Editable value={f.name || 'Level Name'} onChange={v=>upd('name',v)} editable={editable}
+        style={{ fontSize:56, fontWeight:700, letterSpacing:'-0.025em', lineHeight:1.1, color:palette.ink, marginBottom:20 }}/>
+      <Editable value={f.signal || 'One-line signal description.'} onChange={v=>upd('signal',v)} editable={editable}
+        style={{ fontSize:22, fontWeight:400, lineHeight:1.4, color:palette.muted, maxWidth:'60ch' }}/>
+    </div>
+  );
+};
+
+// ─── Level Section (modern, one section per slide) ───────────────────────────
+const TplLevelSection = ({ slide, onChange, palette, editable }) => {
+  const f = slide.fields || {};
+  const upd = (k, v) => onChange({ ...slide, fields: { ...f, [k]:v } });
+  const isDiagnostic = f.variant === 'diagnostic';
+  const bg = isDiagnostic ? '#f5d023' : palette.bg;
+  const ink = isDiagnostic ? '#1a1a1a' : palette.ink;
+  const muted = isDiagnostic ? 'rgba(0,0,0,0.5)' : palette.muted;
+  return (
+    <div style={{ position:'absolute', inset:0, background:bg, display:'flex', flexDirection:'column' }}>
+      {/* Level badge in top-right */}
+      <div style={{ position:'absolute', top:32, right:40, fontSize:13, fontWeight:700, letterSpacing:'.1em', color:muted }}>
+        {f.levelId || 'L0'}
+      </div>
+
+      <div style={{ position:'absolute', inset:'72px 40px', display:'flex', flexDirection:'column', justifyContent:'center' }}>
+        {/* Section label */}
+        <Editable value={f.sectionLabel || 'SECTION'} onChange={v=>upd('sectionLabel',v)} editable={editable}
+          style={{ fontSize:13, fontWeight:700, letterSpacing:'.16em', textTransform:'uppercase', color:muted, marginBottom:24 }}/>
+
+        {/* Main content */}
+        <Editable value={f.body || 'Content goes here.'} onChange={v=>upd('body',v)} editable={editable} multiline
+          style={{ fontSize: isDiagnostic ? 42 : 28, fontWeight: isDiagnostic ? 500 : 400,
+            fontStyle: isDiagnostic ? 'italic' : 'normal',
+            lineHeight:1.35, color:ink, maxWidth:'70ch' }}/>
+      </div>
+    </div>
+  );
+};
+
+// ─── Level Section Terminal (monospace, one section per slide) ────────────────
+const TplLevelSectionTerminal = ({ slide, onChange, palette, editable }) => {
+  const f = slide.fields || {};
+  const upd = (k, v) => onChange({ ...slide, fields: { ...f, [k]:v } });
+  const isDiagnostic = f.variant === 'diagnostic';
+  const bgCol = '#f5f5f0';
+  return (
+    <div style={{ position:'absolute', inset:0, background: isDiagnostic ? '#f5d023' : bgCol, fontFamily:"'Courier New', Courier, monospace" }}>
+      {/* Terminal command header */}
+      <div style={{ padding:'28px 40px 0' }}>
+        <Editable value={f.command || '$ describe --level 0 --section markers'} onChange={v=>upd('command',v)} editable={editable}
+          style={{ fontSize:16, fontWeight:700, color: isDiagnostic ? '#1a1a1a' : '#2d6b2d', fontFamily:'inherit' }}/>
+      </div>
+      <div style={{ position:'absolute', top:56, left:40, right:40, height:1, background: isDiagnostic ? '#1a1a1a' : '#2d6b2d', opacity:0.3 }}/>
+
+      {/* Level badge */}
+      <div style={{ position:'absolute', top:28, right:40, fontSize:14, fontWeight:700, color: isDiagnostic ? '#1a1a1a' : '#888', fontFamily:'inherit' }}>
+        {f.levelId || 'L0'}
+      </div>
+
+      {/* Content */}
+      <div style={{ position:'absolute', inset:'90px 40px 40px', display:'flex', flexDirection:'column', justifyContent:'center' }}>
+        <Editable value={f.sectionLabel || 'SECTION'} onChange={v=>upd('sectionLabel',v)} editable={editable}
+          style={{ fontSize:12, letterSpacing:'.14em', textTransform:'uppercase', color: isDiagnostic ? 'rgba(0,0,0,0.5)' : '#888', marginBottom:20, fontFamily:'inherit' }}/>
+
+        <Editable value={f.body || 'Content goes here.'} onChange={v=>upd('body',v)} editable={editable} multiline
+          style={{ fontSize: isDiagnostic ? 32 : 22, fontWeight:400,
+            fontStyle: isDiagnostic ? 'italic' : 'normal',
+            lineHeight:1.5, color:'#1a1a1a', fontFamily:'inherit', maxWidth:'70ch' }}/>
+      </div>
+    </div>
+  );
+};
+
 // ─── Slide renderer ──────────────────────────────────────────────────────────
 export const TEMPLATES = {
   cover:              TplCover,
@@ -1149,6 +1274,10 @@ export const TEMPLATES = {
   profileCard:        TplProfileCard,
   levelGrid:          TplLevelGrid,
   levelDetail:        TplLevelDetail,
+  profileModern:      TplProfileModern,
+  levelIntro:         TplLevelIntro,
+  levelSection:       TplLevelSection,
+  levelSectionTerminal: TplLevelSectionTerminal,
 };
 
 export const SlideView = ({ slide, idx, total, onChange, editable = true, showMeta = true }) => {

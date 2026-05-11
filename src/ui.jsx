@@ -353,6 +353,10 @@ export const O = {
     { v:'profileCard',         l:'Profile Card (whois)' },
     { v:'levelGrid',           l:'Level Grid (3x2)' },
     { v:'levelDetail',         l:'Level Detail (terminal)' },
+    { v:'profileModern',       l:'Profile Modern' },
+    { v:'levelIntro',          l:'Level Intro' },
+    { v:'levelSection',        l:'Level Section (modern)' },
+    { v:'levelSectionTerminal', l:'Level Section (terminal)' },
   ],
   panelKind: [
     { v:'none',     l:'None' },

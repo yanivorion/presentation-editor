@@ -435,6 +435,47 @@ const PropertiesPanel = ({ slide, idx, total, onChange }) => {
         </Section>
       )}
 
+      {/* Profile Modern */}
+      {slide.template === 'profileModern' && (
+        <Section openSection={openSection} setOpenSection={setOpenSection} id="profilemod" num="03" title="Profile">
+          <Row><Field>
+            <div style={{ fontSize:11, color:T.text3, lineHeight:1.5 }}>
+              Edit name, role, quote, insight, and tags directly on the slide canvas.
+            </div>
+          </Field></Row>
+        </Section>
+      )}
+
+      {/* Level Intro */}
+      {slide.template === 'levelIntro' && (
+        <Section openSection={openSection} setOpenSection={setOpenSection} id="lvlintro" num="03" title="Level Intro">
+          <Row><Field label="Badge (optional)"><TxtIn val={f.badge || ''} onChange={v=>updField('badge',v)}/></Field></Row>
+          <Row><Field>
+            <div style={{ fontSize:11, color:T.text3, lineHeight:1.5 }}>
+              Edit level ID, name, and signal directly on the slide canvas.
+            </div>
+          </Field></Row>
+        </Section>
+      )}
+
+      {/* Level Section (modern + terminal) */}
+      {(slide.template === 'levelSection' || slide.template === 'levelSectionTerminal') && (
+        <Section openSection={openSection} setOpenSection={setOpenSection} id="lvlsec" num="03" title="Level Section">
+          <Row><Field label="Level ID"><TxtIn val={f.levelId || ''} onChange={v=>updField('levelId',v)}/></Field></Row>
+          <Row><Field label="Variant">
+            <Sel val={f.variant || 'normal'} onChange={v=>updField('variant',v)} opts={[{v:'normal',l:'Normal'},{v:'diagnostic',l:'Diagnostic (yellow)'}]}/>
+          </Field></Row>
+          {slide.template === 'levelSectionTerminal' && (
+            <Row><Field label="Terminal command"><TxtIn val={f.command || ''} onChange={v=>updField('command',v)}/></Field></Row>
+          )}
+          <Row><Field>
+            <div style={{ fontSize:11, color:T.text3, lineHeight:1.5 }}>
+              Edit section label and body directly on the slide canvas.
+            </div>
+          </Field></Row>
+        </Section>
+      )}
+
       <Section openSection={openSection} setOpenSection={setOpenSection} id="meta" num="04" title="Corner meta">
         <Row><Field label="Brand (top-left)"><TxtIn val={slide.meta?.brand || ''} onChange={v=>updMeta('brand',v)}/></Field></Row>
         <Row><Field label="Top-right"><TxtIn val={slide.meta?.tr || ''} onChange={v=>updMeta('tr',v)}/></Field></Row>
