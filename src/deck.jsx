@@ -11,9 +11,11 @@ import useFonts from './canvas/useFonts.js';
 import { Copy, X, ChevronLeft, ChevronRight, Undo2, Redo2, Upload, Download, RotateCcw, Play, Plus, ZoomIn, ZoomOut, Maximize, FileJson, FileImage, FileText, ChevronDown } from 'lucide-react';
 import { exportPptx, exportJson as exportJsonFile, importJson as importJsonFile } from './exportUtils.js';
 
+import { loadDeck as loadFromSupabase, saveDeck as saveToSupabase } from './supabase.js';
+
 const LS_KEY = 'deck_editor_v3';
-const loadDeck = () => { try { const r = localStorage.getItem(LS_KEY); if (r) return JSON.parse(r); } catch {} return null; };
-const saveDeck = (d) => { try { localStorage.setItem(LS_KEY, JSON.stringify(d)); } catch {} };
+const loadDeckLocal = () => { try { const r = localStorage.getItem(LS_KEY); if (r) return JSON.parse(r); } catch {} return null; };
+const saveDeckLocal = (d) => { try { localStorage.setItem(LS_KEY, JSON.stringify(d)); } catch {} };
 
 // ─── Slide thumbnail in left rail ─────────────────────────────────────────────
 const Thumbnail = ({ slide, idx, total, active, onClick, onDelete, onDuplicate, scale = 0.15 }) => {
@@ -538,7 +540,12 @@ function useUndoable(initial) {
 
 // ─── Main editor ─────────────────────────────────────────────────────────────
 export default function DeckEditor() {
-  const [deck, setDeck, { undo, redo, canUndo, canRedo }] = useUndoable(() => loadDeck() || { title: SEED_DECK.title, slides: SEED_DECK.slides, globalHeader: { elements: [] }, globalFooter: { elements: [] }, headerEnabled: true, footerEnabled: true });
+  const [deck, setDeck, { undo, redo, canUndo, canRedo }] = useUndoable(() => loadDeckLocal() || { title: SEED_DECK.title, slides: SEED_DECK.slides, globalHeader: { elements: [] }, globalFooter: { elements: [] }, headerEnabled: true, footerEnabled: true });
+
+  // Hydrate from Supabase on mount (overrides localStorage if remote data exists)
+  useEffect(() => {
+    loadFromSupabase().then(remote => { if (remote) setDeck(remote); });
+  }, []);
   const [active, setActive] = useState(0);
   const [present, setPresent] = useState(false);
   const [presentIdx, setPresentIdx] = useState(0);
@@ -651,8 +658,13 @@ export default function DeckEditor() {
     return () => el.removeEventListener('wheel', handler);
   }, []);
 
-  // Persist to localStorage
-  useEffect(() => { saveDeck(deck); }, [deck]);
+  // Persist to localStorage + Supabase
+  const saveTimerRef = useRef(null);
+  useEffect(() => {
+    saveDeckLocal(deck);
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => { saveToSupabase(deck); }, 1500);
+  }, [deck]);
 
   // Marquee selection — native events on canvasWrapRef, window move/up for cross-boundary drag
   const scaleRef = useRef(scale);

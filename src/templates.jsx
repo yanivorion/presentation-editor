@@ -1290,114 +1290,137 @@ const TplLevelGrid = ({ slide, onChange, palette, editable }) => {
   const upd = (k, v) => onChange({ ...slide, fields: { ...f, [k]:v } });
   const levels = f.levels || [];
   const updLevel = (i, k, v) => { const next = levels.slice(); next[i] = { ...next[i], [k]:v }; upd('levels', next); };
-  const bgCol = palette.bg === '#0a0a0a' ? '#0a0a0a' : '#f5f5f0';
+  const headingFont = "'Neue Haas Grotesk Display Pro', 'Inter', sans-serif";
+  const bodyFont = "'Neue Haas Grotesk Text Pro', 'Inter', sans-serif";
   return (
-    <div style={{ position:'absolute', inset:0, background:bgCol, fontFamily:"'Courier New', Courier, monospace" }}>
-      {/* Terminal command header */}
-      <div style={{ padding:'28px 40px 0' }}>
-        <Editable value={f.command || '$ list --levels --all'} onChange={v=>upd('command',v)} editable={editable}
-          style={{ fontSize:18, fontWeight:700, color:'#2d6b2d', fontFamily:'inherit' }}/>
+    <div style={{ position:'absolute', inset:0, background:'#0a0a0a', fontFamily:bodyFont, display:'grid', gridTemplateColumns:'320px 1fr', overflow:'hidden' }}>
+      {/* Left column — title area */}
+      <div style={{ padding:'48px 36px', display:'flex', flexDirection:'column', justifyContent:'space-between' }}>
+        <div>
+          <Editable value={f.caption || 'The Framework'} onChange={v=>upd('caption',v)} editable={editable}
+            style={{ fontSize:12, fontWeight:500, letterSpacing:'.14em', textTransform:'uppercase', color:'#666', marginBottom:16, fontFamily:bodyFont }}/>
+          <Editable value={f.title || 'The Maturity Ladder'} onChange={v=>upd('title',v)} editable={editable} multiline
+            style={{ fontSize:42, fontWeight:700, lineHeight:1.1, letterSpacing:'-0.02em', color:'#ffffff', fontFamily:headingFont }}/>
+          <Editable value={f.subtitle || 'Six levels from theater to self-driving.'} onChange={v=>upd('subtitle',v)} editable={editable} multiline
+            style={{ fontSize:15, fontWeight:400, lineHeight:1.5, color:'#888', marginTop:16, fontFamily:bodyFont }}/>
+        </div>
+        <Editable value={f.footer || 'L0 → L5'} onChange={v=>upd('footer',v)} editable={editable}
+          style={{ fontSize:11, fontWeight:500, letterSpacing:'.1em', color:'#555', fontFamily:bodyFont }}/>
       </div>
-      <div style={{ position:'absolute', top:56, left:40, right:40, height:1, background:'#2d6b2d', opacity:0.4 }}/>
 
-      {/* Grid */}
-      <div style={{ position:'absolute', top:80, left:40, right:40, bottom:40, display:'flex', flexDirection:'column', gap:0 }}>
-        {/* Top row (first 3) */}
-        <div style={{ flex:1, display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:0, borderTop:'1px solid #ccc', borderBottom:'1px solid #ccc' }}>
-          {levels.slice(0,3).map((lv, i) => (
-            <div key={i} style={{ padding:'24px 20px', borderRight: i < 2 ? '1px solid #ccc' : 'none', display:'flex', flexDirection:'column', gap:12 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                <Editable value={lv.id || `L${i}`} onChange={v=>updLevel(i,'id',v)} editable={editable}
-                  style={{ fontSize:13, color:'#888', fontFamily:'inherit' }}/>
-                {lv.badge && (
-                  <span style={{ fontSize:9, fontWeight:700, letterSpacing:'.08em', padding:'3px 8px',
-                    background:'#f5d023', color:'#1a1a1a', fontFamily:'inherit' }}>{lv.badge}</span>
-                )}
-              </div>
-              <Editable value={lv.title || 'Level Title'} onChange={v=>updLevel(i,'title',v)} editable={editable}
-                style={{ fontSize:20, fontWeight:700, color:'#1a1a1a', fontFamily:'inherit', lineHeight:1.2 }}/>
-              <Editable value={lv.desc || 'Description text.'} onChange={v=>updLevel(i,'desc',v)} editable={editable} multiline
-                style={{ fontSize:13, color:'#666', fontFamily:'inherit', lineHeight:1.5 }}/>
+      {/* Right side — 3x2 card grid */}
+      <div style={{ padding:'32px 36px 32px 0', display:'grid', gridTemplateColumns:'repeat(2,1fr)', gridTemplateRows:'repeat(3,1fr)', gap:10 }}>
+        {levels.map((lv, i) => (
+          <div key={i} style={{ background:'#161616', border:'1px solid #222', borderRadius:4, padding:'22px 20px', display:'flex', flexDirection:'column', gap:10 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <Editable value={lv.id || `L${i}`} onChange={v=>updLevel(i,'id',v)} editable={editable}
+                style={{ fontSize:11, fontWeight:600, letterSpacing:'.08em', color:'#555', fontFamily:bodyFont }}/>
+              {lv.badge && (
+                <span style={{ fontSize:9, fontWeight:700, letterSpacing:'.06em', padding:'2px 7px',
+                  background:'#f5d023', color:'#0a0a0a', borderRadius:2, fontFamily:bodyFont }}>{lv.badge}</span>
+              )}
             </div>
-          ))}
-        </div>
-        {/* Bottom row (next 3) */}
-        <div style={{ flex:1, display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:0, borderBottom:'1px solid #ccc' }}>
-          {levels.slice(3,6).map((lv, i) => (
-            <div key={i+3} style={{ padding:'24px 20px', borderRight: i < 2 ? '1px solid #ccc' : 'none', display:'flex', flexDirection:'column', gap:12 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                <Editable value={lv.id || `L${i+3}`} onChange={v=>updLevel(i+3,'id',v)} editable={editable}
-                  style={{ fontSize:13, color:'#888', fontFamily:'inherit' }}/>
-                {lv.badge && (
-                  <span style={{ fontSize:9, fontWeight:700, letterSpacing:'.08em', padding:'3px 8px',
-                    background:'#f5d023', color:'#1a1a1a', fontFamily:'inherit' }}>{lv.badge}</span>
-                )}
-              </div>
-              <Editable value={lv.title || 'Level Title'} onChange={v=>updLevel(i+3,'title',v)} editable={editable}
-                style={{ fontSize:20, fontWeight:700, color:'#1a1a1a', fontFamily:'inherit', lineHeight:1.2 }}/>
-              <Editable value={lv.desc || 'Description text.'} onChange={v=>updLevel(i+3,'desc',v)} editable={editable} multiline
-                style={{ fontSize:13, color:'#666', fontFamily:'inherit', lineHeight:1.5 }}/>
-            </div>
-          ))}
-        </div>
+            <Editable value={lv.title || 'Level Title'} onChange={v=>updLevel(i,'title',v)} editable={editable}
+              style={{ fontSize:16, fontWeight:700, color:'#fff', fontFamily:headingFont, lineHeight:1.25 }}/>
+            <Editable value={lv.desc || 'Description text.'} onChange={v=>updLevel(i,'desc',v)} editable={editable} multiline
+              style={{ fontSize:12, color:'#888', fontFamily:bodyFont, lineHeight:1.5 }}/>
+          </div>
+        ))}
       </div>
     </div>
   );
 };
 
-// ─── Level Detail (terminal-style two-column breakdown) ──────────────────────
+// ─── Level Detail (typographic list layout) ─────────────────────────────────
 const TplLevelDetail = ({ slide, onChange, palette, editable }) => {
   const f = slide.fields || {};
   const upd = (k, v) => onChange({ ...slide, fields: { ...f, [k]:v } });
-  const bgCol = palette.bg === '#0a0a0a' ? '#0a0a0a' : '#f5f5f0';
   const leftRows = f.leftRows || [];
   const rightRows = f.rightRows || [];
   const updLeft = (i, k, v) => { const next = leftRows.slice(); next[i] = { ...next[i], [k]:v }; upd('leftRows', next); };
   const updRight = (i, k, v) => { const next = rightRows.slice(); next[i] = { ...next[i], [k]:v }; upd('rightRows', next); };
+  const headingFont = "'Neue Haas Grotesk Display Pro', 'Inter', sans-serif";
+  const bodyFont = "'Neue Haas Grotesk Text Pro', 'Inter', sans-serif";
 
-  const RowBlock = ({ row, idx, updFn }) => (
-    <div style={{ borderTop:'1px solid #ccc', padding:'14px 0' }}>
-      <Editable value={row.label || 'LABEL'} onChange={v=>updFn(idx,'label',v)} editable={editable}
-        style={{ fontSize:11, letterSpacing:'.12em', textTransform:'uppercase', color:'#888', marginBottom:6, fontFamily:'inherit' }}/>
-      <Editable value={row.value || 'Content'} onChange={v=>updFn(idx,'value',v)} editable={editable} multiline
-        style={{ fontSize:15, fontWeight: row.bold ? 700 : 400, color:'#1a1a1a', fontFamily:'inherit', lineHeight:1.5 }}/>
-      {row.badge && (
-        <span style={{ display:'inline-block', marginTop:6, fontSize:9, fontWeight:700, letterSpacing:'.08em',
-          padding:'3px 8px', background:'#f5d023', color:'#1a1a1a', fontFamily:'inherit' }}>{row.badge}</span>
-      )}
-    </div>
-  );
+  const levelId = leftRows[0]?.value || 'L0';
+  const levelName = leftRows[1]?.value || 'Level Name';
+
+  const allRows = [...leftRows.slice(2), ...rightRows];
+  const allUpdFns = [
+    ...leftRows.slice(2).map((_, i) => (idx, k, v) => updLeft(idx + 2, k, v)),
+    ...rightRows.map((_, i) => (idx, k, v) => updRight(idx, k, v)),
+  ];
 
   return (
-    <div style={{ position:'absolute', inset:0, background:bgCol, fontFamily:"'Courier New', Courier, monospace" }}>
-      {/* Terminal command header */}
-      <div style={{ padding:'28px 40px 0' }}>
-        <Editable value={f.command || '$ describe --level 0'} onChange={v=>upd('command',v)} editable={editable}
-          style={{ fontSize:18, fontWeight:700, color:'#2d6b2d', fontFamily:'inherit' }}/>
+    <div style={{ position:'absolute', inset:0, background:'#fafafa', fontFamily:bodyFont }}>
+      {/* Top meta nav */}
+      <div style={{ position:'absolute', top:28, right:48, display:'flex', alignItems:'center', gap:16 }}>
+        <span style={{ fontSize:11, fontWeight:500, letterSpacing:'.1em', color:'#999', textTransform:'uppercase', fontFamily:bodyFont }}>
+          {levelId} of 5
+        </span>
       </div>
-      <div style={{ position:'absolute', top:56, left:40, right:40, height:1, background:'#2d6b2d', opacity:0.4 }}/>
 
-      {/* Two columns */}
-      <div style={{ position:'absolute', top:80, left:40, right:40, bottom:40, display:'grid', gridTemplateColumns:'1fr 1fr', gap:48 }}>
-        {/* Left column */}
-        <div style={{ display:'flex', flexDirection:'column' }}>
-          {leftRows.map((row, i) => <RowBlock key={i} row={row} idx={i} updFn={updLeft}/>)}
-
-          {/* Diagnostic callout */}
-          {f.diagnostic && (
-            <div style={{ marginTop:'auto', background:'#f5d023', padding:20, borderRadius:0 }}>
-              <div style={{ fontSize:10, fontWeight:700, letterSpacing:'.12em', textTransform:'uppercase', color:'#1a1a1a', marginBottom:8, fontFamily:'inherit' }}>DIAGNOSTIC</div>
-              <Editable value={f.diagnostic} onChange={v=>upd('diagnostic',v)} editable={editable} multiline
-                style={{ fontSize:15, fontWeight:400, color:'#1a1a1a', fontFamily:'inherit', lineHeight:1.4 }}/>
-            </div>
+      {/* Hero header — large level ID + name */}
+      <div style={{ padding:'48px 56px 0', display:'flex', alignItems:'baseline', gap:32 }}>
+        <Editable value={levelId} onChange={v=>updLeft(0,'value',v)} editable={editable}
+          style={{ fontSize:120, fontWeight:900, letterSpacing:'-0.04em', lineHeight:0.85, color:'#0a0a0a', fontFamily:headingFont }}/>
+        <div style={{ flex:1 }}>
+          <Editable value={levelName} onChange={v=>updLeft(1,'value',v)} editable={editable}
+            style={{ fontSize:36, fontWeight:700, letterSpacing:'-0.02em', lineHeight:1.1, color:'#0a0a0a', fontFamily:headingFont }}/>
+          {leftRows[2] && (
+            <Editable value={leftRows[2].value || ''} onChange={v=>updLeft(2,'value',v)} editable={editable}
+              style={{ fontSize:15, fontWeight:400, color:'#666', marginTop:8, fontFamily:bodyFont, lineHeight:1.4 }}/>
           )}
         </div>
-
-        {/* Right column */}
-        <div style={{ display:'flex', flexDirection:'column' }}>
-          {rightRows.map((row, i) => <RowBlock key={i} row={row} idx={i} updFn={updRight}/>)}
-        </div>
       </div>
+
+      {/* Separator */}
+      <div style={{ margin:'24px 56px 0', height:1, background:'#ddd' }}/>
+
+      {/* Content rows — vertical list with horizontal rules */}
+      <div style={{ padding:'8px 56px 0', display:'grid', gridTemplateColumns:'160px 1fr', gap:0 }}>
+        {leftRows.slice(3).map((row, i) => (
+          <React.Fragment key={`l${i}`}>
+            <div style={{ borderBottom:'1px solid #eee', padding:'18px 0', display:'flex', alignItems:'flex-start' }}>
+              <Editable value={row.label || 'LABEL'} onChange={v=>updLeft(i+3,'label',v)} editable={editable}
+                style={{ fontSize:10, fontWeight:600, letterSpacing:'.12em', textTransform:'uppercase', color:'#999', fontFamily:bodyFont }}/>
+            </div>
+            <div style={{ borderBottom:'1px solid #eee', padding:'18px 0', display:'flex', flexDirection:'column', gap:4 }}>
+              <Editable value={row.value || 'Content'} onChange={v=>updLeft(i+3,'value',v)} editable={editable} multiline
+                style={{ fontSize:14, fontWeight: row.bold ? 700 : 400, color:'#1a1a1a', fontFamily:bodyFont, lineHeight:1.5 }}/>
+              {row.badge && (
+                <span style={{ display:'inline-block', fontSize:9, fontWeight:700, letterSpacing:'.06em', padding:'2px 7px',
+                  background:'#f5d023', color:'#0a0a0a', borderRadius:2, fontFamily:bodyFont }}>{row.badge}</span>
+              )}
+            </div>
+          </React.Fragment>
+        ))}
+        {rightRows.map((row, i) => (
+          <React.Fragment key={`r${i}`}>
+            <div style={{ borderBottom:'1px solid #eee', padding:'18px 0', display:'flex', alignItems:'flex-start' }}>
+              <Editable value={row.label || 'LABEL'} onChange={v=>updRight(i,'label',v)} editable={editable}
+                style={{ fontSize:10, fontWeight:600, letterSpacing:'.12em', textTransform:'uppercase', color:'#999', fontFamily:bodyFont }}/>
+            </div>
+            <div style={{ borderBottom:'1px solid #eee', padding:'18px 0', display:'flex', flexDirection:'column', gap:4 }}>
+              <Editable value={row.value || 'Content'} onChange={v=>updRight(i,'value',v)} editable={editable} multiline
+                style={{ fontSize:14, fontWeight: row.bold ? 700 : 400, color:'#1a1a1a', fontFamily:bodyFont, lineHeight:1.5 }}/>
+              {row.badge && (
+                <span style={{ display:'inline-block', fontSize:9, fontWeight:700, letterSpacing:'.06em', padding:'2px 7px',
+                  background:'#f5d023', color:'#0a0a0a', borderRadius:2, fontFamily:bodyFont }}>{row.badge}</span>
+              )}
+            </div>
+          </React.Fragment>
+        ))}
+      </div>
+
+      {/* Diagnostic callout — dark inverted strip at bottom */}
+      {f.diagnostic && (
+        <div style={{ position:'absolute', bottom:0, left:0, right:0, background:'#0a0a0a', padding:'20px 56px', display:'flex', alignItems:'center', gap:20 }}>
+          <span style={{ fontSize:10, fontWeight:700, letterSpacing:'.12em', textTransform:'uppercase', color:'#f5d023', fontFamily:bodyFont, whiteSpace:'nowrap' }}>DIAGNOSTIC</span>
+          <Editable value={f.diagnostic} onChange={v=>upd('diagnostic',v)} editable={editable} multiline
+            style={{ fontSize:14, fontWeight:400, color:'#ccc', fontFamily:bodyFont, lineHeight:1.4, fontStyle:'italic' }}/>
+        </div>
+      )}
     </div>
   );
 };

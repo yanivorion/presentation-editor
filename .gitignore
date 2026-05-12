@@ -3,7 +3,12 @@ dist
 .DS_Store
 *.pdf
 deno.lock
+.env
+.env.local
 
 # Base44
 base44/.app.json*
 base44/.types/
+
+# Local Netlify folder
+.netlify

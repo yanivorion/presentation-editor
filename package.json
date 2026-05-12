@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@base44/sdk": "^0.8.27",
+    "@supabase/supabase-js": "^2.105.4",
     "html2canvas": "^1.4.1",
     "lucide-react": "^1.14.0",
     "pptxgenjs": "^4.0.1",
