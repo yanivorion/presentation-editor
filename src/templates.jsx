@@ -333,6 +333,21 @@ const Editable = ({ value, onChange, multiline, style, placeholder, editable = t
 };
 
 // ─── Global header strip ─────────────────────────────────────────────────────
+const MetaField = ({ value, onChange, editable, style }) => {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (ref.current && ref.current.innerText !== (value || '')) {
+      ref.current.innerText = value || '';
+    }
+  }, [value]);
+  if (!editable) return <span style={style}>{value}</span>;
+  return (
+    <span ref={ref} contentEditable suppressContentEditableWarning
+      onBlur={e => { const t = e.currentTarget.innerText; if (t !== value) onChange(t); }}
+      style={{ ...style, outline:'none', cursor:'text', minWidth:20 }}/>
+  );
+};
+
 const Meta = ({ slide, palette, idx, total, onChange, editable }) => {
   const upd = (k,v) => onChange({ ...slide, meta: { ...slide.meta, [k]:v } });
   const m = slide.meta || {};
@@ -343,13 +358,13 @@ const Meta = ({ slide, palette, idx, total, onChange, editable }) => {
       display:'flex', alignItems:'center', justifyContent:'space-between',
       padding:'0 40px', pointerEvents:'auto', zIndex:50,
     }}>
-      <Editable value={m.brand || 'Editor Cluster'} onChange={v=>upd('brand',v)} editable={editable}
+      <MetaField value={m.brand || 'Editor Cluster'} onChange={v=>upd('brand',v)} editable={editable}
         style={{ fontSize:12, fontWeight:600, color:palette.ink, fontFamily:headerFont, letterSpacing:'0.01em' }}/>
-      <Editable value={m.tr || 'All Hands'} onChange={v=>upd('tr',v)} editable={editable}
+      <MetaField value={m.tr || 'All Hands'} onChange={v=>upd('tr',v)} editable={editable}
         style={{ fontSize:12, fontWeight:500, color:palette.ink, fontFamily:headerFont, letterSpacing:'0.01em' }}/>
       <div style={{ display:'flex', alignItems:'center', gap:6 }}>
         <span style={{ width:8, height:8, background:palette.ink, display:'inline-block' }}/>
-        <Editable value={m.bl || 'May— 2026'} onChange={v=>upd('bl',v)} editable={editable}
+        <MetaField value={m.bl || 'May— 2026'} onChange={v=>upd('bl',v)} editable={editable}
           style={{ fontSize:12, fontWeight:500, color:palette.ink, fontFamily:headerFont, letterSpacing:'0.01em' }}/>
       </div>
     </div>

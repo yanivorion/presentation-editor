@@ -576,28 +576,41 @@ export default function DeckEditor() {
         if (document.activeElement?.contentEditable === 'true') return;
         if (selectedIds.length === 0) return;
         const curEls = deck.slides[active]?.elements || [];
-        clipboardRef.current = curEls.filter(el => selectedIds.includes(el.id));
+        const copied = curEls.filter(el => selectedIds.includes(el.id));
+        clipboardRef.current = copied;
+        const payload = JSON.stringify({ __deckElements: true, elements: copied });
+        navigator.clipboard?.writeText(payload).catch(() => {});
         return;
       }
 
       if (mod && e.key === 'v') {
         if (document.activeElement?.contentEditable === 'true') return;
-        if (clipboardRef.current.length === 0) return;
         e.preventDefault();
-        const pasted = clipboardRef.current.map(el => ({
-          ...el,
-          id: `el_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          x: el.x + 20,
-          y: el.y + 20,
-        }));
-        setDeck(d => {
-          const ss = d.slides.slice();
-          const slide = ss[active];
-          ss[active] = { ...slide, elements: [...(slide.elements || []), ...pasted] };
-          return { ...d, slides: ss };
-        });
-        setSelectedIds(pasted.map(el => el.id));
-        lastActionRef.current = { type: 'paste', data: clipboardRef.current };
+        (navigator.clipboard?.readText() || Promise.resolve('')).then(text => {
+          let elements = null;
+          try {
+            const parsed = JSON.parse(text);
+            if (parsed?.__deckElements && Array.isArray(parsed.elements)) {
+              elements = parsed.elements;
+            }
+          } catch {}
+          if (!elements) elements = clipboardRef.current;
+          if (!elements || elements.length === 0) return;
+          const pasted = elements.map(el => ({
+            ...el,
+            id: `el_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            x: el.x + 20,
+            y: el.y + 20,
+          }));
+          setDeck(d => {
+            const ss = d.slides.slice();
+            const slide = ss[active];
+            ss[active] = { ...slide, elements: [...(slide.elements || []), ...pasted] };
+            return { ...d, slides: ss };
+          });
+          setSelectedIds(pasted.map(el => el.id));
+          lastActionRef.current = { type: 'paste', data: elements };
+        }).catch(() => {});
         return;
       }
 
