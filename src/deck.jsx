@@ -564,19 +564,28 @@ export default function DeckEditor() {
   const clipboardRef = useRef([]);
   const lastActionRef = useRef(null);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts — use refs to avoid stale closures
+  const selectedIdsRef = useRef(selectedIds);
+  selectedIdsRef.current = selectedIds;
+  const activeIdxRef = useRef(active);
+  activeIdxRef.current = active;
+  const deckRef2 = useRef(deck);
+  deckRef2.current = deck;
+
   useEffect(() => {
     const handler = (e) => {
       const mod = e.metaKey || e.ctrlKey;
+
       if (mod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
       if (mod && e.key === 'z' && e.shiftKey) { e.preventDefault(); redo(); return; }
       if (mod && e.key === 'y') { e.preventDefault(); redo(); return; }
 
       if (mod && e.key === 'c') {
         if (document.activeElement?.contentEditable === 'true') return;
-        if (selectedIds.length === 0) return;
-        const curEls = deck.slides[active]?.elements || [];
-        const copied = curEls.filter(el => selectedIds.includes(el.id));
+        if (selectedIdsRef.current.length === 0) return;
+        e.preventDefault();
+        const curEls = deckRef2.current.slides[activeIdxRef.current]?.elements || [];
+        const copied = curEls.filter(el => selectedIdsRef.current.includes(el.id));
         clipboardRef.current = copied;
         const payload = JSON.stringify({ __deckElements: true, elements: copied });
         navigator.clipboard?.writeText(payload).catch(() => {});
@@ -586,40 +595,38 @@ export default function DeckEditor() {
       if (mod && e.key === 'v') {
         if (document.activeElement?.contentEditable === 'true') return;
         e.preventDefault();
-        (navigator.clipboard?.readText() || Promise.resolve('')).then(text => {
-          let elements = null;
-          try {
-            const parsed = JSON.parse(text);
-            if (parsed?.__deckElements && Array.isArray(parsed.elements)) {
-              elements = parsed.elements;
-            }
-          } catch {}
-          if (!elements) elements = clipboardRef.current;
+        const doLocalPaste = () => {
+          const elements = clipboardRef.current;
           if (!elements || elements.length === 0) return;
-          const pasted = elements.map(el => ({
-            ...el,
-            id: `el_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-            x: el.x + 20,
-            y: el.y + 20,
-          }));
-          setDeck(d => {
-            const ss = d.slides.slice();
-            const slide = ss[active];
-            ss[active] = { ...slide, elements: [...(slide.elements || []), ...pasted] };
-            return { ...d, slides: ss };
-          });
-          setSelectedIds(pasted.map(el => el.id));
-          lastActionRef.current = { type: 'paste', data: elements };
-        }).catch(() => {});
+          pasteElements(elements);
+        };
+        if (navigator.clipboard?.readText) {
+          navigator.clipboard.readText().then(text => {
+            let elements = null;
+            try {
+              const parsed = JSON.parse(text);
+              if (parsed?.__deckElements && Array.isArray(parsed.elements)) {
+                elements = parsed.elements;
+              }
+            } catch {}
+            if (elements && elements.length > 0) {
+              pasteElements(elements);
+            } else {
+              doLocalPaste();
+            }
+          }).catch(() => doLocalPaste());
+        } else {
+          doLocalPaste();
+        }
         return;
       }
 
       if (mod && e.key === 'd') {
         if (document.activeElement?.contentEditable === 'true') return;
         e.preventDefault();
-        if (selectedIds.length === 0) return;
-        const curEls = deck.slides[active]?.elements || [];
-        const toDup = curEls.filter(el => selectedIds.includes(el.id));
+        if (selectedIdsRef.current.length === 0) return;
+        const curEls = deckRef2.current.slides[activeIdxRef.current]?.elements || [];
+        const toDup = curEls.filter(el => selectedIdsRef.current.includes(el.id));
         const duped = toDup.map(el => ({
           ...el,
           id: `el_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -628,8 +635,8 @@ export default function DeckEditor() {
         }));
         setDeck(d => {
           const ss = d.slides.slice();
-          const slide = ss[active];
-          ss[active] = { ...slide, elements: [...(slide.elements || []), ...duped] };
+          const slide = ss[activeIdxRef.current];
+          ss[activeIdxRef.current] = { ...slide, elements: [...(slide.elements || []), ...duped] };
           return { ...d, slides: ss };
         });
         setSelectedIds(duped.map(el => el.id));
@@ -640,21 +647,39 @@ export default function DeckEditor() {
       if ((e.key === 'Delete' || e.key === 'Backspace') && !mod) {
         if (document.activeElement?.contentEditable === 'true') return;
         if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
-        if (selectedIds.length === 0) return;
+        if (selectedIdsRef.current.length === 0) return;
         e.preventDefault();
         setDeck(d => {
           const ss = d.slides.slice();
-          const slide = ss[active];
-          ss[active] = { ...slide, elements: (slide.elements || []).filter(el => !selectedIds.includes(el.id)) };
+          const slide = ss[activeIdxRef.current];
+          ss[activeIdxRef.current] = { ...slide, elements: (slide.elements || []).filter(el => !selectedIdsRef.current.includes(el.id)) };
           return { ...d, slides: ss };
         });
         setSelectedIds([]);
         return;
       }
     };
+
+    const pasteElements = (elements) => {
+      const pasted = elements.map(el => ({
+        ...el,
+        id: `el_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        x: el.x + 20,
+        y: el.y + 20,
+      }));
+      setDeck(d => {
+        const ss = d.slides.slice();
+        const slide = ss[activeIdxRef.current];
+        ss[activeIdxRef.current] = { ...slide, elements: [...(slide.elements || []), ...pasted] };
+        return { ...d, slides: ss };
+      });
+      setSelectedIds(pasted.map(el => el.id));
+      lastActionRef.current = { type: 'paste', data: elements };
+    };
+
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [undo, redo, selectedIds, active, deck]);
+  }, [undo, redo, setDeck, setSelectedIds]);
 
   // Cmd+scroll (pinch) to zoom
   useEffect(() => {
