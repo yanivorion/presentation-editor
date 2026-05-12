@@ -1,8 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { T, EASE, sysFont, glassPanel, glassBar, ctrlBase, Lbl, Field, Row, Sep,
          NumIn, TxtIn, TxtArea, Sel, Sw, TRow, TBtn, Acc, O } from './ui.jsx';
-import { SlideView, SLIDE_W, SLIDE_H, themePalette } from './templates.jsx';
+import { SlideView, SLIDE_W, SLIDE_H, themePalette, SelectionContext, MultiDragContext, useMultiDragBus } from './templates.jsx';
 import { SEED_DECK, ALL_DIRECTIONS } from './seed.js';
+import ElementsCanvas from './canvas/ElementsCanvas.jsx';
+import ElementToolbar from './panels/ElementToolbar.jsx';
+import StylePanel from './panels/StylePanel.jsx';
+import LayersPanel from './panels/LayersPanel.jsx';
+import useFonts from './canvas/useFonts.js';
+import { Copy, X, ChevronLeft, ChevronRight, Undo2, Redo2, Upload, Download, RotateCcw, Play, Plus, ZoomIn, ZoomOut, Maximize, FileJson, FileImage, FileText, ChevronDown } from 'lucide-react';
+import { exportPptx, exportJson as exportJsonFile, importJson as importJsonFile } from './exportUtils.js';
 
 const LS_KEY = 'deck_editor_v3';
 const loadDeck = () => { try { const r = localStorage.getItem(LS_KEY); if (r) return JSON.parse(r); } catch {} return null; };
@@ -42,10 +49,10 @@ const Thumbnail = ({ slide, idx, total, active, onClick, onDelete, onDuplicate, 
         <div style={{ position:'absolute', top:4, right:4, display:'flex', gap:3 }}>
           <button onClick={(e)=>{ e.stopPropagation(); onDuplicate(); }} title="Duplicate"
             style={{ width:20, height:20, border:'none', borderRadius:4, cursor:'pointer',
-                     background:'rgba(255,255,255,.9)', fontSize:11, lineHeight:1 }}>⎘</button>
+                     background:'rgba(255,255,255,.9)', display:'flex', alignItems:'center', justifyContent:'center' }}><Copy size={11} /></button>
           <button onClick={(e)=>{ e.stopPropagation(); onDelete(); }} title="Delete"
             style={{ width:20, height:20, border:'none', borderRadius:4, cursor:'pointer',
-                     background:'rgba(255,255,255,.9)', fontSize:13, lineHeight:1, color:'#dc2626' }}>×</button>
+                     background:'rgba(255,255,255,.9)', display:'flex', alignItems:'center', justifyContent:'center', color:'#dc2626' }}><X size={12} /></button>
         </div>
       )}
     </div>
@@ -486,33 +493,294 @@ const PropertiesPanel = ({ slide, idx, total, onChange }) => {
   );
 };
 
+// ─── Undo/Redo hook ──────────────────────────────────────────────────────────
+function useUndoable(initial) {
+  const [state, setState] = useState(initial);
+  const historyRef = useRef(null);
+  const pointerRef = useRef(0);
+  const skipRef = useRef(false);
+  if (historyRef.current === null) { historyRef.current = [state]; }
+
+  const set = useCallback((updater) => {
+    setState(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      if (!skipRef.current) {
+        const h = historyRef.current;
+        historyRef.current = h.slice(0, pointerRef.current + 1);
+        historyRef.current.push(next);
+        if (historyRef.current.length > 80) historyRef.current = historyRef.current.slice(-80);
+        pointerRef.current = historyRef.current.length - 1;
+      }
+      skipRef.current = false;
+      return next;
+    });
+  }, []);
+
+  const undo = useCallback(() => {
+    if (pointerRef.current <= 0) return;
+    pointerRef.current--;
+    skipRef.current = true;
+    setState(historyRef.current[pointerRef.current]);
+  }, []);
+
+  const redo = useCallback(() => {
+    if (pointerRef.current >= historyRef.current.length - 1) return;
+    pointerRef.current++;
+    skipRef.current = true;
+    setState(historyRef.current[pointerRef.current]);
+  }, []);
+
+  const canUndo = pointerRef.current > 0;
+  const canRedo = pointerRef.current < historyRef.current.length - 1;
+
+  return [state, set, { undo, redo, canUndo, canRedo }];
+}
+
 // ─── Main editor ─────────────────────────────────────────────────────────────
 export default function DeckEditor() {
-  const [deck, setDeck] = useState(() => loadDeck() || { title: SEED_DECK.title, slides: SEED_DECK.slides });
+  const [deck, setDeck, { undo, redo, canUndo, canRedo }] = useUndoable(() => loadDeck() || { title: SEED_DECK.title, slides: SEED_DECK.slides, globalHeader: { elements: [] }, globalFooter: { elements: [] }, headerEnabled: true, footerEnabled: true });
   const [active, setActive] = useState(0);
   const [present, setPresent] = useState(false);
   const [presentIdx, setPresentIdx] = useState(0);
   const canvasWrapRef = useRef(null);
+  const slideContainerRef = useRef(null);
   const [scale, setScale] = useState(0.6);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [leftTab, setLeftTab] = useState('slides'); // 'slides' | 'layers'
+  const [editingGlobal, setEditingGlobal] = useState(null); // null | 'header' | 'footer'
+  const [marquee, setMarquee] = useState(null);
+  const marqueeRef = useRef(null);
+  const multiDragBus = useMultiDragBus();
+  useFonts();
+
+  // Clipboard for elements
+  const clipboardRef = useRef([]);
+  const lastActionRef = useRef(null);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
+      if (mod && e.key === 'z' && e.shiftKey) { e.preventDefault(); redo(); return; }
+      if (mod && e.key === 'y') { e.preventDefault(); redo(); return; }
+
+      if (mod && e.key === 'c') {
+        if (document.activeElement?.contentEditable === 'true') return;
+        if (selectedIds.length === 0) return;
+        const curEls = deck.slides[active]?.elements || [];
+        clipboardRef.current = curEls.filter(el => selectedIds.includes(el.id));
+        return;
+      }
+
+      if (mod && e.key === 'v') {
+        if (document.activeElement?.contentEditable === 'true') return;
+        if (clipboardRef.current.length === 0) return;
+        e.preventDefault();
+        const pasted = clipboardRef.current.map(el => ({
+          ...el,
+          id: `el_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          x: el.x + 20,
+          y: el.y + 20,
+        }));
+        setDeck(d => {
+          const ss = d.slides.slice();
+          const slide = ss[active];
+          ss[active] = { ...slide, elements: [...(slide.elements || []), ...pasted] };
+          return { ...d, slides: ss };
+        });
+        setSelectedIds(pasted.map(el => el.id));
+        lastActionRef.current = { type: 'paste', data: clipboardRef.current };
+        return;
+      }
+
+      if (mod && e.key === 'd') {
+        if (document.activeElement?.contentEditable === 'true') return;
+        e.preventDefault();
+        if (selectedIds.length === 0) return;
+        const curEls = deck.slides[active]?.elements || [];
+        const toDup = curEls.filter(el => selectedIds.includes(el.id));
+        const duped = toDup.map(el => ({
+          ...el,
+          id: `el_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          x: el.x + 20,
+          y: el.y + 20,
+        }));
+        setDeck(d => {
+          const ss = d.slides.slice();
+          const slide = ss[active];
+          ss[active] = { ...slide, elements: [...(slide.elements || []), ...duped] };
+          return { ...d, slides: ss };
+        });
+        setSelectedIds(duped.map(el => el.id));
+        lastActionRef.current = { type: 'duplicate', data: toDup };
+        return;
+      }
+
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !mod) {
+        if (document.activeElement?.contentEditable === 'true') return;
+        if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+        if (selectedIds.length === 0) return;
+        e.preventDefault();
+        setDeck(d => {
+          const ss = d.slides.slice();
+          const slide = ss[active];
+          ss[active] = { ...slide, elements: (slide.elements || []).filter(el => !selectedIds.includes(el.id)) };
+          return { ...d, slides: ss };
+        });
+        setSelectedIds([]);
+        return;
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [undo, redo, selectedIds, active, deck]);
+
+  // Cmd+scroll (pinch) to zoom
+  useEffect(() => {
+    const el = canvasWrapRef.current;
+    if (!el) return;
+    const handler = (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const delta = -e.deltaY * 0.001;
+        setScale(s => Math.min(2, Math.max(0.1, s + delta)));
+      }
+    };
+    el.addEventListener('wheel', handler, { passive: false });
+    return () => el.removeEventListener('wheel', handler);
+  }, []);
 
   // Persist to localStorage
   useEffect(() => { saveDeck(deck); }, [deck]);
 
+  // Marquee selection — native events on canvasWrapRef, window move/up for cross-boundary drag
+  const scaleRef = useRef(scale);
+  scaleRef.current = scale;
+  const activeRef = useRef(active);
+  activeRef.current = active;
+  const deckRef = useRef(deck);
+  deckRef.current = deck;
+  const marqueeRafRef = useRef(null);
+
+  useEffect(() => {
+    const wrap = canvasWrapRef.current;
+    if (!wrap) return;
+
+    const clientToSlide = (clientX, clientY) => {
+      const container = slideContainerRef.current;
+      if (!container) return { x: 0, y: 0 };
+      const rect = container.getBoundingClientRect();
+      return {
+        x: (clientX - rect.left) / scaleRef.current,
+        y: (clientY - rect.top) / scaleRef.current,
+      };
+    };
+
+    const rectsIntersect = (a, b) => !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
+
+    let moveHandler = null;
+    let upHandler = null;
+
+    const onDown = (e) => {
+      if (e.button !== 0) return;
+      const el = e.target;
+      if (el.closest('[data-editable-wrap]') || el.closest('[data-canvas-element]') || el.closest('button') || el.closest('[contenteditable]') || el.closest('input') || el.closest('select') || el.closest('textarea')) return;
+      if (!e.shiftKey) setSelectedIds([]);
+      const pt = clientToSlide(e.clientX, e.clientY);
+      marqueeRef.current = { startX: pt.x, startY: pt.y };
+      setMarquee({ x: pt.x, y: pt.y, w: 0, h: 0 });
+
+      moveHandler = (ev) => {
+        if (!marqueeRef.current) return;
+        if (marqueeRafRef.current) return;
+        marqueeRafRef.current = requestAnimationFrame(() => {
+          marqueeRafRef.current = null;
+          if (!marqueeRef.current) return;
+          const p = clientToSlide(ev.clientX, ev.clientY);
+          const m = marqueeRef.current;
+          setMarquee({
+            x: Math.min(m.startX, p.x), y: Math.min(m.startY, p.y),
+            w: Math.abs(p.x - m.startX), h: Math.abs(p.y - m.startY),
+          });
+        });
+      };
+
+      upHandler = (ev) => {
+        if (!marqueeRef.current) { cleanup(); return; }
+        const p = clientToSlide(ev.clientX, ev.clientY);
+        const m = marqueeRef.current;
+        const left = Math.min(m.startX, p.x);
+        const top = Math.min(m.startY, p.y);
+        const w = Math.abs(p.x - m.startX);
+        const h = Math.abs(p.y - m.startY);
+
+        if (w > 5 || h > 5) {
+          const selRect = { left, top, right: left + w, bottom: top + h };
+
+          const curEls = deckRef.current.slides[activeRef.current]?.elements || [];
+          const freeformHits = curEls.filter(el2 => {
+            if (el2.visible === false || el2.locked) return false;
+            return rectsIntersect(selRect, { left: el2.x, top: el2.y, right: el2.x + el2.w, bottom: el2.y + el2.h });
+          }).map(el2 => el2.id);
+
+          const container = slideContainerRef.current;
+          const tplHits = [];
+          if (container) {
+            container.querySelectorAll('[data-editable-wrap]').forEach(node => {
+              const nodeRect = node.getBoundingClientRect();
+              const cRect = container.getBoundingClientRect();
+              const s = scaleRef.current;
+              const elRect = {
+                left: (nodeRect.left - cRect.left) / s,
+                top: (nodeRect.top - cRect.top) / s,
+                right: (nodeRect.right - cRect.left) / s,
+                bottom: (nodeRect.bottom - cRect.top) / s,
+              };
+              if (rectsIntersect(selRect, elRect)) {
+                const id = node.dataset.editableId;
+                if (id) tplHits.push(id);
+              }
+            });
+          }
+
+          setSelectedIds([...freeformHits, ...tplHits]);
+        }
+        marqueeRef.current = null;
+        setMarquee(null);
+        cleanup();
+      };
+
+      const cleanup = () => {
+        if (moveHandler) window.removeEventListener('pointermove', moveHandler);
+        if (upHandler) window.removeEventListener('pointerup', upHandler);
+        moveHandler = null;
+        upHandler = null;
+      };
+
+      window.addEventListener('pointermove', moveHandler);
+      window.addEventListener('pointerup', upHandler);
+    };
+
+    wrap.addEventListener('pointerdown', onDown);
+    return () => {
+      wrap.removeEventListener('pointerdown', onDown);
+      if (moveHandler) window.removeEventListener('pointermove', moveHandler);
+      if (upHandler) window.removeEventListener('pointerup', upHandler);
+    };
+  }, []);
+
   const slides = deck?.slides || [];
   const cur = slides[active];
 
-  // Compute scale to fit canvas area
+  // Compute initial scale to fit canvas area
   useEffect(() => {
     const el = canvasWrapRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => {
-      const w = el.clientWidth - 64;
-      const h = el.clientHeight - 64;
-      const s = Math.min(w / SLIDE_W, h / SLIDE_H, 1);
-      setScale(Math.max(s, 0.2));
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
+    const w = el.clientWidth - 64;
+    const h = el.clientHeight - 64;
+    const s = Math.min(w / SLIDE_W, h / SLIDE_H, 1);
+    setScale(Math.max(s, 0.2));
   }, []);
 
   // Mutations
@@ -528,7 +796,8 @@ export default function DeckEditor() {
     setDeck(d => {
       const ns = { id:`s_${Date.now()}`, theme:'white', template:'twoColumn',
                    fields:{ title:'New slide', body:'Body text…', panel:{ kind:'bullets', data:['Point one','Point two'] }},
-                   meta:{ brand:'Heuristics Tool', tr:'New', bl:'' } };
+                   meta:{ brand:'Heuristics Tool', tr:'New', bl:'' },
+                   elements:[], globalHeader:true, globalFooter:true };
       const ss = d.slides.slice();
       ss.splice(active+1, 0, ns);
       setActive(active+1);
@@ -568,32 +837,109 @@ export default function DeckEditor() {
     setDeck({ title: SEED_DECK.title, slides: SEED_DECK.slides });
     setActive(0);
   };
-  const exportJson = () => {
-    const blob = new Blob([JSON.stringify(deck, null, 2)], { type:'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `${deck.title.replace(/\s+/g,'-')}.json`;
-    a.click(); URL.revokeObjectURL(url);
-  };
-  const importJson = () => {
-    const inp = document.createElement('input');
-    inp.type='file'; inp.accept='application/json';
-    inp.onchange = (e) => {
-      const f = e.target.files?.[0]; if (!f) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        try {
-          const imported = JSON.parse(reader.result);
-          setDeck({ title: imported.title || 'Imported Deck', slides: imported.slides || [] });
-          setActive(0);
-        } catch {
-          alert('Invalid JSON');
-        }
-      };
-      reader.readAsText(f);
+  const [exportDropdown, setExportDropdown] = useState(false);
+  const exportDropdownRef = useRef(null);
+
+  useEffect(() => {
+    if (!exportDropdown) return;
+    const handler = (e) => {
+      if (exportDropdownRef.current && !exportDropdownRef.current.contains(e.target)) setExportDropdown(false);
     };
-    inp.click();
+    document.addEventListener('pointerdown', handler);
+    return () => document.removeEventListener('pointerdown', handler);
+  }, [exportDropdown]);
+
+  const handleExportJson = () => { exportJsonFile(deck); setExportDropdown(false); };
+  const handleExportPptx = async () => { setExportDropdown(false); await exportPptx(deck); };
+  const handleExportPng = () => {
+    setExportDropdown(false);
+    const container = slideContainerRef.current;
+    if (!container) return;
+    import('html2canvas').then(({ default: html2canvas }) => {
+      const slideEl = container.querySelector('[data-slide-scale]');
+      if (!slideEl) return;
+      html2canvas(slideEl, { scale: 2, useCORS: true, width: SLIDE_W, height: SLIDE_H }).then(canvas => {
+        const a = document.createElement('a');
+        a.href = canvas.toDataURL('image/png');
+        a.download = `slide-${String(active + 1).padStart(2, '0')}.png`;
+        a.click();
+      });
+    }).catch(() => alert('Failed to export PNG'));
   };
+
+  const handleImport = () => {
+    importJsonFile((imported) => {
+      setDeck(imported);
+      setActive(0);
+    });
+  };
+
+  // Element mutations
+  const curElements = cur?.elements || [];
+  const selectedElement = selectedIds.length === 1 ? curElements.find(el => el.id === selectedIds[0]) || null : null;
+
+  const setElements = useCallback((newElements) => {
+    setDeck(d => {
+      const ss = d.slides.slice();
+      ss[active] = { ...ss[active], elements: newElements };
+      return { ...d, slides: ss };
+    });
+  }, [active]);
+
+  const addElement = useCallback((el) => {
+    setDeck(d => {
+      const ss = d.slides.slice();
+      const slide = ss[active];
+      ss[active] = { ...slide, elements: [...(slide.elements || []), el] };
+      return { ...d, slides: ss };
+    });
+    setSelectedIds([el.id]);
+  }, [active]);
+
+  const updateElement = useCallback((updatedEl) => {
+    setDeck(d => {
+      const ss = d.slides.slice();
+      const slide = ss[active];
+      ss[active] = { ...slide, elements: (slide.elements || []).map(el => el.id === updatedEl.id ? updatedEl : el) };
+      return { ...d, slides: ss };
+    });
+  }, [active]);
+
+  // Global header/footer element helpers
+  const globalHeaderElements = deck.globalHeader?.elements || [];
+  const globalFooterElements = deck.globalFooter?.elements || [];
+
+  const setGlobalElements = useCallback((which, newElements) => {
+    setDeck(d => ({
+      ...d,
+      [which === 'header' ? 'globalHeader' : 'globalFooter']: {
+        ...(d[which === 'header' ? 'globalHeader' : 'globalFooter'] || {}),
+        elements: newElements,
+      },
+    }));
+  }, []);
+
+  const addGlobalElement = useCallback((el) => {
+    if (!editingGlobal) return;
+    setDeck(d => {
+      const key = editingGlobal === 'header' ? 'globalHeader' : 'globalFooter';
+      const current = d[key]?.elements || [];
+      return { ...d, [key]: { ...d[key], elements: [...current, el] } };
+    });
+    setSelectedIds([el.id]);
+  }, [editingGlobal]);
+
+  const updateGlobalElement = useCallback((updatedEl) => {
+    if (!editingGlobal) return;
+    setDeck(d => {
+      const key = editingGlobal === 'header' ? 'globalHeader' : 'globalFooter';
+      const current = d[key]?.elements || [];
+      return { ...d, [key]: { ...d[key], elements: current.map(el => el.id === updatedEl.id ? updatedEl : el) } };
+    });
+  }, [editingGlobal]);
+
+  const globalEditElements = editingGlobal === 'header' ? globalHeaderElements : editingGlobal === 'footer' ? globalFooterElements : [];
+  const globalSelectedElement = editingGlobal && selectedIds.length === 1 ? globalEditElements.find(el => el.id === selectedIds[0]) : null;
 
   // Present mode keyboard
   useEffect(() => {
@@ -639,11 +985,11 @@ export default function DeckEditor() {
         }}>
           <button onClick={()=>setPresentIdx(Math.max(0, presentIdx-1))}
             style={{ background:'transparent', border:`1px solid rgba(255,255,255,.3)`, color:'#fff',
-                     width:28, height:28, borderRadius:'50%', cursor:'pointer' }}>‹</button>
+                     width:28, height:28, borderRadius:'50%', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}><ChevronLeft size={16} /></button>
           <span>{String(presentIdx+1).padStart(2,'0')} / {String(slides.length).padStart(2,'0')}</span>
           <button onClick={()=>setPresentIdx(Math.min(slides.length-1, presentIdx+1))}
             style={{ background:'transparent', border:`1px solid rgba(255,255,255,.3)`, color:'#fff',
-                     width:28, height:28, borderRadius:'50%', cursor:'pointer' }}>›</button>
+                     width:28, height:28, borderRadius:'50%', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}><ChevronRight size={16} /></button>
           <button onClick={()=>setPresent(false)}
             style={{ background:'transparent', border:`1px solid rgba(255,255,255,.3)`, color:'#fff',
                      padding:'0 10px', height:28, borderRadius:6, cursor:'pointer', fontSize:10, letterSpacing:'.14em' }}>EXIT</button>
@@ -698,74 +1044,255 @@ export default function DeckEditor() {
 
         <div style={{ flex:1 }}/>
 
-        <TBtn onClick={importJson}>Import</TBtn>
-        <TBtn onClick={exportJson}>Export JSON</TBtn>
-        <TBtn onClick={resetDeck}>Reset</TBtn>
-        <TBtn onClick={()=>{ setPresentIdx(active); setPresent(true); }} dark>▶ Present</TBtn>
+        <TBtn onClick={()=>{ setEditingGlobal(editingGlobal === 'header' ? null : 'header'); setSelectedIds([]); }}>
+          {editingGlobal === 'header' ? '✓ Done Header' : 'Edit Header'}
+        </TBtn>
+        <TBtn onClick={()=>{ setEditingGlobal(editingGlobal === 'footer' ? null : 'footer'); setSelectedIds([]); }}>
+          {editingGlobal === 'footer' ? '✓ Done Footer' : 'Edit Footer'}
+        </TBtn>
+        <TBtn onClick={()=>setDeck(d=>({ ...d, headerEnabled: !d.headerEnabled }))}>
+          {deck.headerEnabled ? 'Header: ON' : 'Header: OFF'}
+        </TBtn>
+        <TBtn onClick={()=>setDeck(d=>({ ...d, footerEnabled: !d.footerEnabled }))}>
+          {deck.footerEnabled ? 'Footer: ON' : 'Footer: OFF'}
+        </TBtn>
+        <TBtn onClick={undo} style={{ opacity: canUndo ? 1 : 0.35 }}><Undo2 size={13} /> Undo</TBtn>
+        <TBtn onClick={redo} style={{ opacity: canRedo ? 1 : 0.35 }}><Redo2 size={13} /> Redo</TBtn>
+        <TBtn onClick={handleImport}><Upload size={13} /> Import</TBtn>
+        <div ref={exportDropdownRef} style={{ position:'relative' }}>
+          <TBtn onClick={() => setExportDropdown(v => !v)}><Download size={13} /> Export <ChevronDown size={10} /></TBtn>
+          {exportDropdown && (
+            <div style={{
+              position:'absolute', top:'100%', right:0, marginTop:4,
+              background:'#fff', borderRadius:8, boxShadow:'0 8px 32px rgba(0,0,0,0.18)',
+              border:'1px solid rgba(0,0,0,0.08)', overflow:'hidden', zIndex:100, minWidth:180,
+            }}>
+              <button onClick={handleExportJson} style={{
+                display:'flex', alignItems:'center', gap:8, width:'100%', padding:'10px 14px',
+                border:'none', background:'none', cursor:'pointer', fontSize:12, fontWeight:500,
+                color:'#1a1a1a', fontFamily:'inherit',
+              }} onMouseEnter={e => e.currentTarget.style.background='#f5f5f5'} onMouseLeave={e => e.currentTarget.style.background='none'}>
+                <FileJson size={15} /> Export as JSON
+              </button>
+              <button onClick={handleExportPptx} style={{
+                display:'flex', alignItems:'center', gap:8, width:'100%', padding:'10px 14px',
+                border:'none', background:'none', cursor:'pointer', fontSize:12, fontWeight:500,
+                color:'#1a1a1a', fontFamily:'inherit',
+              }} onMouseEnter={e => e.currentTarget.style.background='#f5f5f5'} onMouseLeave={e => e.currentTarget.style.background='none'}>
+                <FileText size={15} /> Export as PPTX
+              </button>
+              <button onClick={handleExportPng} style={{
+                display:'flex', alignItems:'center', gap:8, width:'100%', padding:'10px 14px',
+                border:'none', background:'none', cursor:'pointer', fontSize:12, fontWeight:500,
+                color:'#1a1a1a', fontFamily:'inherit',
+              }} onMouseEnter={e => e.currentTarget.style.background='#f5f5f5'} onMouseLeave={e => e.currentTarget.style.background='none'}>
+                <FileImage size={15} /> Export current slide as PNG
+              </button>
+            </div>
+          )}
+        </div>
+        <TBtn onClick={resetDeck}><RotateCcw size={13} /> Reset</TBtn>
+        <TBtn onClick={()=>{ setPresentIdx(active); setPresent(true); }} dark><Play size={13} /> Present</TBtn>
       </div>
 
-      {/* LEFT: SLIDE LIST */}
+      {/* LEFT: SLIDE LIST / LAYERS */}
       <div style={{
         gridArea:'left', borderRight:`1px solid ${T.border}`,
         background:'rgba(255,255,255,0.4)', backdropFilter:T.blur,
         display:'flex', flexDirection:'column', overflow:'hidden',
       }}>
-        <div style={{ padding:'10px 12px', borderBottom:`1px solid ${T.border}`,
-                       display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-          <span style={{ fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:T.text4 }}>
-            Slides · {slides.length}
-          </span>
-          <button onClick={addSlide} title="Add slide"
-            style={{ width:22, height:22, border:`1px solid ${T.ctrlBorder}`, background:T.ctrl,
-                     borderRadius:5, cursor:'pointer', fontSize:13, color:T.text2 }}>+</button>
+        {/* Tab toggle */}
+        <div style={{ display:'flex', borderBottom:`1px solid ${T.border}` }}>
+          <button onClick={()=>setLeftTab('slides')}
+            style={{ flex:1, padding:'8px 0', fontSize:9, fontWeight:700, letterSpacing:'.12em', textTransform:'uppercase',
+              background: leftTab==='slides' ? 'rgba(74,144,217,0.08)' : 'transparent',
+              color: leftTab==='slides' ? '#4a90d9' : T.text4,
+              border:'none', borderBottom: leftTab==='slides' ? '2px solid #4a90d9' : '2px solid transparent',
+              cursor:'pointer' }}>Slides</button>
+          <button onClick={()=>setLeftTab('layers')}
+            style={{ flex:1, padding:'8px 0', fontSize:9, fontWeight:700, letterSpacing:'.12em', textTransform:'uppercase',
+              background: leftTab==='layers' ? 'rgba(74,144,217,0.08)' : 'transparent',
+              color: leftTab==='layers' ? '#4a90d9' : T.text4,
+              border:'none', borderBottom: leftTab==='layers' ? '2px solid #4a90d9' : '2px solid transparent',
+              cursor:'pointer' }}>Layers</button>
         </div>
-        <div style={{ flex:1, overflowY:'auto', padding:'10px 12px',
-                       display:'flex', flexDirection:'column', gap:10 }}>
-          {slides.map((s, i) => (
-            <div key={s.id || i}
-              draggable
-              onDragStart={()=>{ dragRef.current.from = i; }}
-              onDragOver={(e)=>e.preventDefault()}
-              onDrop={()=>{ if (dragRef.current.from!=null && dragRef.current.from!==i) moveSlide(dragRef.current.from, i); dragRef.current.from=null; }}
-            >
-              <Thumbnail slide={s} idx={i} total={slides.length}
-                active={i===active} onClick={()=>setActive(i)}
-                onDelete={delSlide} onDuplicate={dupSlide}/>
+
+        {leftTab === 'slides' && (
+          <>
+            <div style={{ padding:'10px 12px', borderBottom:`1px solid ${T.border}`,
+                           display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <span style={{ fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:T.text4 }}>
+                Slides · {slides.length}
+              </span>
+              <button onClick={addSlide} title="Add slide"
+                style={{ width:22, height:22, border:`1px solid ${T.ctrlBorder}`, background:T.ctrl,
+                         borderRadius:5, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:T.text2 }}><Plus size={14} /></button>
             </div>
-          ))}
-        </div>
+            <div style={{ flex:1, overflowY:'auto', padding:'10px 12px',
+                           display:'flex', flexDirection:'column', gap:10 }}>
+              {slides.map((s, i) => (
+                <div key={s.id || i}
+                  draggable
+                  onDragStart={()=>{ dragRef.current.from = i; }}
+                  onDragOver={(e)=>e.preventDefault()}
+                  onDrop={()=>{ if (dragRef.current.from!=null && dragRef.current.from!==i) moveSlide(dragRef.current.from, i); dragRef.current.from=null; }}
+                >
+                  <Thumbnail slide={s} idx={i} total={slides.length}
+                    active={i===active} onClick={()=>{ setActive(i); setSelectedIds([]); }}
+                    onDelete={delSlide} onDuplicate={dupSlide}/>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {leftTab === 'layers' && (
+          <LayersPanel
+            elements={curElements}
+            selectedIds={selectedIds}
+            onSelect={setSelectedIds}
+            onChange={setElements}
+            globalHeaderEnabled={cur?.globalHeader !== false}
+            globalFooterEnabled={cur?.globalFooter !== false}
+            onToggleHeader={() => setSlide(active, { ...cur, globalHeader: !(cur?.globalHeader !== false) })}
+            onToggleFooter={() => setSlide(active, { ...cur, globalFooter: !(cur?.globalFooter !== false) })}
+          />
+        )}
       </div>
 
       {/* CENTER: CANVAS */}
       <div ref={canvasWrapRef} style={{
         gridArea:'center', position:'relative', overflow:'hidden',
-        display:'flex', alignItems:'center', justifyContent:'center',
+        display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
         padding:32,
       }}>
-        <div style={{
+        {/* Element Toolbar */}
+        <div style={{ position:'absolute', top:10, left:'50%', transform:'translateX(-50%)', zIndex:20 }}>
+          <ElementToolbar onAdd={editingGlobal ? addGlobalElement : addElement} />
+        </div>
+        {editingGlobal && (
+          <div style={{ position:'absolute', top:10, left:18, zIndex:20, fontSize:10, fontWeight:700,
+            letterSpacing:'.1em', textTransform:'uppercase', color:'#4a90d9',
+            background:'rgba(255,255,255,0.9)', padding:'6px 10px', borderRadius:6 }}>
+            Editing Global {editingGlobal}
+          </div>
+        )}
+
+        <div ref={slideContainerRef} style={{
+          position:'relative',
           width: SLIDE_W, height: SLIDE_H,
           transform: `scale(${scale})`, transformOrigin:'center center',
           boxShadow:'0 30px 80px rgba(0,0,0,0.18), 0 4px 12px rgba(0,0,0,0.06)',
           background:'#fff',
         }}>
-          <SlideView slide={cur} idx={active} total={slides.length}
-            onChange={(s)=>setSlide(active, s)} editable={true}/>
+          <SelectionContext.Provider value={selectedIds}>
+          <MultiDragContext.Provider value={multiDragBus}>
+            <SlideView slide={cur} idx={active} total={slides.length}
+              onChange={(s)=>setSlide(active, s)} editable={!editingGlobal} scale={scale}/>
+          </MultiDragContext.Provider>
+          </SelectionContext.Provider>
+
+          {/* Global header elements (readonly when not editing header) */}
+          {deck.headerEnabled && cur?.globalHeader !== false && !editingGlobal && globalHeaderElements.length > 0 && (
+            <div style={{ position:'absolute', top:0, left:0, right:0, height:80, pointerEvents:'none' }}>
+              {globalHeaderElements.filter(el=>el.visible!==false).map(el => (
+                <div key={el.id} style={{ position:'absolute', left:el.x, top:el.y, width:el.w, height:el.h, opacity:el.style?.opacity??1 }} />
+              ))}
+            </div>
+          )}
+
+          {/* Global footer elements (readonly when not editing footer) */}
+          {deck.footerEnabled && cur?.globalFooter !== false && !editingGlobal && globalFooterElements.length > 0 && (
+            <div style={{ position:'absolute', bottom:0, left:0, right:0, height:80, pointerEvents:'none' }}>
+              {globalFooterElements.filter(el=>el.visible!==false).map(el => (
+                <div key={el.id} style={{ position:'absolute', left:el.x, top:el.y, width:el.w, height:el.h, opacity:el.style?.opacity??1 }} />
+              ))}
+            </div>
+          )}
+
+          {/* Slide elements canvas (normal mode) */}
+          {!editingGlobal && (
+            <ElementsCanvas
+              elements={curElements}
+              selectedIds={selectedIds}
+              scale={scale}
+              onSelect={setSelectedIds}
+              onChange={setElements}
+              multiDragBus={multiDragBus}
+            />
+          )}
+
+          {/* Global header/footer editing canvas */}
+          {editingGlobal && (
+            <>
+              <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.3)', pointerEvents:'none', zIndex:5 }} />
+              <div style={{
+                position:'absolute',
+                top: editingGlobal === 'header' ? 0 : undefined,
+                bottom: editingGlobal === 'footer' ? 0 : undefined,
+                left:0, right:0, height:80,
+                background:'rgba(255,255,255,0.95)',
+                border: '2px dashed #4a90d9',
+                zIndex:6,
+              }}>
+                <ElementsCanvas
+                  elements={globalEditElements}
+                  selectedIds={selectedIds}
+                  scale={scale}
+                  onSelect={setSelectedIds}
+                  onChange={(els) => setGlobalElements(editingGlobal, els)}
+                  multiDragBus={multiDragBus}
+                />
+              </div>
+            </>
+          )}
+
+          {/* Marquee visual overlay (rendered in slide coordinate space) */}
+          {marquee && marquee.w > 2 && marquee.h > 2 && (
+            <div style={{
+              position:'absolute',
+              left: marquee.x, top: marquee.y,
+              width: marquee.w, height: marquee.h,
+              border:'1.5px dashed #4a90d9',
+              background:'rgba(74, 144, 217, 0.08)',
+              pointerEvents:'none', zIndex:9999,
+            }} />
+          )}
         </div>
-        <div style={{ position:'absolute', top:14, right:18,
-                       fontSize:10, fontWeight:600, letterSpacing:'.12em', textTransform:'uppercase',
-                       color:T.text4 }}>
-          {Math.round(scale*100)}% · 1280×800
+        <div style={{ position:'absolute', top:10, right:14, display:'flex', alignItems:'center', gap:4 }}>
+          <button onClick={() => setScale(s => Math.max(0.1, s - 0.1))}
+            style={{ ...ctrlBase, width:26, height:26, borderRadius:4, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}><ZoomOut size={14} /></button>
+          <span style={{ fontSize:10, fontWeight:600, letterSpacing:'.1em', color:T.text4, minWidth:38, textAlign:'center' }}>
+            {Math.round(scale*100)}%
+          </span>
+          <button onClick={() => setScale(s => Math.min(2, s + 0.1))}
+            style={{ ...ctrlBase, width:26, height:26, borderRadius:4, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}><ZoomIn size={14} /></button>
+          <button onClick={() => {
+            const el = canvasWrapRef.current;
+            if (!el) return;
+            const w = el.clientWidth - 64;
+            const h = el.clientHeight - 64;
+            setScale(Math.min(w / SLIDE_W, h / SLIDE_H, 1));
+          }}
+            style={{ ...ctrlBase, height:26, padding:'0 8px', borderRadius:4, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:4 }}><Maximize size={12} /> <span style={{ fontSize:9, fontWeight:700, letterSpacing:'.08em' }}>FIT</span></button>
         </div>
       </div>
 
-      {/* RIGHT: PROPERTIES */}
+      {/* RIGHT: PROPERTIES / STYLE */}
       <div style={{
         gridArea:'right', borderLeft:`1px solid ${T.border}`,
         background:'rgba(255,255,255,0.55)', backdropFilter:T.blur,
         overflow:'hidden', display:'flex', flexDirection:'column',
       }}>
-        <PropertiesPanel slide={cur} idx={active} total={slides.length}
-          onChange={(s)=>setSlide(active, s)}/>
+        {(selectedElement || globalSelectedElement) ? (
+          <StylePanel
+            element={globalSelectedElement || selectedElement}
+            onChange={editingGlobal ? updateGlobalElement : updateElement}
+          />
+        ) : (
+          <PropertiesPanel slide={cur} idx={active} total={slides.length}
+            onChange={(s)=>setSlide(active, s)}/>
+        )}
       </div>
 
       {/* BOTTOM BAR */}
@@ -774,12 +1301,12 @@ export default function DeckEditor() {
         display:'flex', alignItems:'center', padding:'0 16px', gap:12,
       }}>
         <button onClick={()=>setActive(Math.max(0, active-1))}
-          style={{ ...ctrlBase, width:34, height:28, cursor:'pointer' }}>‹</button>
+          style={{ ...ctrlBase, width:34, height:28, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}><ChevronLeft size={16} /></button>
         <span style={{ fontSize:11, fontWeight:600, color:T.text2, minWidth:80, textAlign:'center' }}>
           {String(active+1).padStart(2,'0')} / {String(slides.length).padStart(2,'0')}
         </span>
         <button onClick={()=>setActive(Math.min(slides.length-1, active+1))}
-          style={{ ...ctrlBase, width:34, height:28, cursor:'pointer' }}>›</button>
+          style={{ ...ctrlBase, width:34, height:28, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}><ChevronRight size={16} /></button>
 
         <div style={{ flex:1 }}/>
 

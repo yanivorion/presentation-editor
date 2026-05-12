@@ -302,7 +302,7 @@ export const Acc = ({ open, onToggle, num, title, children }) => (
   </div>
 );
 
-export const TBtn = ({ onClick, dark, icon, children, title }) => (
+export const TBtn = ({ onClick, dark, icon, children, title, style: extraStyle }) => (
   <button onClick={onClick} title={title} style={{
     display:'flex', alignItems:'center', gap:5, height:28, padding:'0 12px',
     background: dark ? T.accent : 'rgba(255,255,255,0.50)',
@@ -312,6 +312,7 @@ export const TBtn = ({ onClick, dark, icon, children, title }) => (
     letterSpacing:'0.01em', whiteSpace:'nowrap',
     transition:`all 300ms ${EASE.out}`,
     boxShadow: dark ? '0 2px 10px rgba(59,130,246,0.3)' : 'none',
+    ...extraStyle,
   }}
     onMouseEnter={e=>{
       e.currentTarget.style.transform = 'translateY(-1px)';

@@ -1,5 +1,19 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState, useCallback, createContext, useContext } from 'react';
 import { slideFont } from './ui.jsx';
+
+export const SelectionContext = createContext([]);
+export const MultiDragContext = createContext(null);
+
+export function useMultiDragBus() {
+  const listenersRef = useRef(new Set());
+  const busRef = useRef({
+    subscribe(cb) { listenersRef.current.add(cb); return () => listenersRef.current.delete(cb); },
+    broadcast(sourceId, dx, dy) {
+      listenersRef.current.forEach(cb => cb(sourceId, dx, dy));
+    },
+  });
+  return busRef.current;
+}
 
 // Slide is rendered at native 1280×800 and scaled to fit by parent.
 export const SLIDE_W = 1280;
@@ -26,36 +40,295 @@ export const themePalette = (theme) => {
 //   - Does NOT clobber the DOM (or the cursor) while the user is typing
 //     directly in this contentEditable, because the parent doesn't re-render
 //     during in-place edits (we only commit on blur).
+let _editableCounter = 0;
+const HANDLE_SZ = 6;
+const HANDLE_DIRS = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+const HANDLE_CURSOR = { nw:'nwse-resize', n:'ns-resize', ne:'nesw-resize', e:'ew-resize', se:'nwse-resize', s:'ns-resize', sw:'nesw-resize', w:'ew-resize' };
+
 const Editable = ({ value, onChange, multiline, style, placeholder, editable = true, tag = 'div' }) => {
   const Tag = tag;
   const ref = useRef(null);
+  const [editing, setEditing] = useState(false);
+  const [localSelected, setLocalSelected] = useState(false);
+  const externalSelectedIds = useContext(SelectionContext);
+  const multiDragBus = useContext(MultiDragContext);
+  const wrapRef = useRef(null);
+  const interactionRef = useRef(null);
+  const geomRef = useRef({ x: 0, y: 0 });
+  const sizeOverrideRef = useRef(null);
+  const [, forceUpdate] = useState(0);
+  const idRef = useRef(null);
+  if (idRef.current === null) idRef.current = `tpl_${++_editableCounter}`;
+  const stableId = idRef.current;
 
+  const selectedIdsRef = useRef(externalSelectedIds);
+  selectedIdsRef.current = externalSelectedIds;
+
+  // Multi-drag bus subscription
   useEffect(() => {
-    if (!editable) return;
+    if (!multiDragBus) return;
+    return multiDragBus.subscribe((sourceId, dx, dy) => {
+      if (sourceId === stableId) return;
+      if (!selectedIdsRef.current.includes(stableId)) return;
+      const el = wrapRef.current;
+      if (!el) return;
+      geomRef.current.x += dx;
+      geomRef.current.y += dy;
+      el.style.transform = `translate(${geomRef.current.x}px, ${geomRef.current.y}px)`;
+    });
+  }, [multiDragBus, stableId]);
+
+  // Sync contentEditable value
+  useEffect(() => {
+    if (!editable || !editing) return;
     const el = ref.current;
     if (!el) return;
     const next = value || '';
     if (el.innerHTML !== next) el.innerHTML = next;
-  }, [value, editable]);
+  }, [value, editable, editing]);
+
+  // ─── Imperatively apply size override (absolute positioning after resize) ───
+  useLayoutEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const sov = sizeOverrideRef.current;
+    if (sov) {
+      el.style.position = 'absolute';
+      el.style.left = sov.left + 'px';
+      el.style.top = sov.top + 'px';
+      el.style.width = sov.w + 'px';
+      el.style.minHeight = sov.h + 'px';
+    }
+  });
+
+  // ─── Unified pointer handler (same pattern as CanvasElement) ───
+  useEffect(() => {
+    if (!editable || editing) return;
+    const el = wrapRef.current;
+    if (!el) return;
+
+    const onDown = (e) => {
+      const handleEl = e.target.closest?.('[data-resize-handle]');
+      e.stopPropagation();
+      e.preventDefault();
+      setLocalSelected(true);
+      el.setPointerCapture(e.pointerId);
+
+      const scaleEl = el.closest('[data-slide-scale]');
+      const scale = scaleEl ? parseFloat(scaleEl.dataset.slideScale) || 1 : 1;
+
+      if (handleEl) {
+        const dir = handleEl.dataset.handleDir;
+        const rect = el.getBoundingClientRect();
+        const initLeft = el.offsetLeft;
+        const initTop = el.offsetTop;
+        if (!sizeOverrideRef.current) {
+          sizeOverrideRef.current = { left: initLeft, top: initTop, w: rect.width / scale, h: rect.height / scale };
+          el.style.position = 'absolute';
+          el.style.left = initLeft + 'px';
+          el.style.top = initTop + 'px';
+        }
+        interactionRef.current = {
+          type: 'resize',
+          handle: dir,
+          startX: e.clientX,
+          startY: e.clientY,
+          scale,
+          origW: sizeOverrideRef.current.w,
+          origH: sizeOverrideRef.current.h,
+          origLeft: sizeOverrideRef.current.left,
+          origTop: sizeOverrideRef.current.top,
+          origX: geomRef.current.x,
+          origY: geomRef.current.y,
+        };
+        const grid = scaleEl?.querySelector('[data-dot-grid]');
+        if (grid) grid.style.opacity = '0.4';
+      } else {
+        interactionRef.current = {
+          type: 'drag',
+          startX: e.clientX,
+          startY: e.clientY,
+          scale,
+          origX: geomRef.current.x,
+          origY: geomRef.current.y,
+          moved: false,
+        };
+      }
+    };
+
+    const onMove = (e) => {
+      const i = interactionRef.current;
+      if (!i) return;
+
+      if (i.type === 'resize') {
+        const dx = (e.clientX - i.startX) / i.scale;
+        const dy = (e.clientY - i.startY) / i.scale;
+        let newW = i.origW, newH = i.origH;
+        let newLeft = i.origLeft, newTop = i.origTop;
+
+        if (i.handle.includes('e')) newW = Math.max(20, i.origW + dx);
+        if (i.handle.includes('w')) { newW = Math.max(20, i.origW - dx); newLeft = i.origLeft + (i.origW - newW); }
+        if (i.handle.includes('s')) newH = Math.max(20, i.origH + dy);
+        if (i.handle.includes('n')) { newH = Math.max(20, i.origH - dy); newTop = i.origTop + (i.origH - newH); }
+
+        const GRID = 20;
+        newW = Math.round(newW / GRID) * GRID || GRID;
+        newH = Math.round(newH / GRID) * GRID || GRID;
+
+        sizeOverrideRef.current = { left: newLeft, top: newTop, w: newW, h: newH };
+        el.style.left = newLeft + 'px';
+        el.style.top = newTop + 'px';
+        el.style.width = newW + 'px';
+        el.style.minHeight = newH + 'px';
+        el.style.height = '';
+      } else {
+        const dx = (e.clientX - i.startX) / i.scale;
+        const dy = (e.clientY - i.startY) / i.scale;
+        if (!i.moved && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) {
+          i.moved = true;
+          const scaleEl = el.closest('[data-slide-scale]');
+          const grid = scaleEl?.querySelector('[data-dot-grid]');
+          if (grid) grid.style.opacity = '0.4';
+        }
+        if (i.moved) {
+          const GRID = 20;
+          const snapX = Math.round((i.origX + dx) / GRID) * GRID;
+          const snapY = Math.round((i.origY + dy) / GRID) * GRID;
+          const prevX = geomRef.current.x;
+          const prevY = geomRef.current.y;
+          geomRef.current.x = snapX;
+          geomRef.current.y = snapY;
+          el.style.transform = `translate(${snapX}px, ${snapY}px)`;
+          if (multiDragBus && selectedIdsRef.current.length > 1 && selectedIdsRef.current.includes(stableId)) {
+            const ddx = snapX - prevX;
+            const ddy = snapY - prevY;
+            if (ddx !== 0 || ddy !== 0) multiDragBus.broadcast(stableId, ddx, ddy);
+          }
+        }
+      }
+    };
+
+    const onUp = (e) => {
+      if (!interactionRef.current) return;
+      const scaleEl = el.closest('[data-slide-scale]');
+      const grid = scaleEl?.querySelector('[data-dot-grid]');
+      if (grid) grid.style.opacity = '0';
+      interactionRef.current = null;
+      try { el.releasePointerCapture(e.pointerId); } catch {}
+      forceUpdate(n => n + 1);
+    };
+
+    el.addEventListener('pointerdown', onDown);
+    el.addEventListener('pointermove', onMove);
+    el.addEventListener('pointerup', onUp);
+    return () => {
+      el.removeEventListener('pointerdown', onDown);
+      el.removeEventListener('pointermove', onMove);
+      el.removeEventListener('pointerup', onUp);
+    };
+  }, [editable, editing, multiDragBus, stableId]);
+
+  const handleDoubleClick = useCallback((e) => {
+    if (!editable) return;
+    e.stopPropagation();
+    setEditing(true);
+    setLocalSelected(false);
+  }, [editable]);
+
+  const externalSelected = externalSelectedIds.includes(stableId);
+  const selected = localSelected || externalSelected;
+
+  // Deselect on click outside
+  useEffect(() => {
+    if (!localSelected) return;
+    const handler = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setLocalSelected(false);
+    };
+    document.addEventListener('pointerdown', handler);
+    return () => document.removeEventListener('pointerdown', handler);
+  }, [localSelected]);
+
+  const handles = selected && editable ? HANDLE_DIRS : [];
 
   if (!editable) {
     return <Tag style={style} dangerouslySetInnerHTML={{ __html: value || '' }}/>;
   }
+
+  const ox = geomRef.current.x;
+  const oy = geomRef.current.y;
+  const tx = (ox || oy) ? `translate(${ox}px, ${oy}px)` : undefined;
+
+  if (editing) {
+    return (
+      <div ref={wrapRef} data-editable-wrap="true" data-editable-id={stableId}
+        style={{ position:'relative', transform: tx, outline:'2px solid #4a90d9', outlineOffset:1, userSelect:'none' }}>
+        <Tag
+          ref={ref}
+          contentEditable
+          suppressContentEditableWarning
+          onBlur={e => { onChange(multiline ? e.currentTarget.innerHTML : e.currentTarget.innerText); setEditing(false); }}
+          onKeyDown={e => {
+            if (!multiline && e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
+          }}
+          data-placeholder={placeholder || ''}
+          style={{ outline:'none', cursor:'text', ...style }}
+        />
+      </div>
+    );
+  }
+
+  const wrapStyle = {
+    position: 'relative',
+    transform: tx,
+    overflow: 'visible',
+    userSelect: 'none',
+    touchAction: 'none',
+    cursor: 'move',
+    boxShadow: selected ? '0 0 0 2px #4a90d9' : undefined,
+    zIndex: selected ? 10 : undefined,
+  };
+
   return (
-    <Tag
-      ref={ref}
-      contentEditable
-      suppressContentEditableWarning
-      onBlur={e => onChange(multiline ? e.currentTarget.innerHTML : e.currentTarget.innerText)}
-      onKeyDown={e => {
-        if (!multiline && e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
-      }}
-      data-placeholder={placeholder || ''}
-      style={{
-        outline:'none', cursor:'text',
-        ...style,
-      }}
-    />
+    <div
+      ref={wrapRef}
+      data-editable-wrap="true"
+      data-editable-id={stableId}
+      style={wrapStyle}
+      onDoubleClick={handleDoubleClick}
+    >
+      <Tag style={{ pointerEvents: 'none', ...style }} dangerouslySetInnerHTML={{ __html: value || '' }}/>
+
+      {handles.map(h => {
+        const el = wrapRef.current;
+        const w = el ? el.offsetWidth : 100;
+        const ht = el ? el.offsetHeight : 40;
+        const scaleEl = el?.closest?.('[data-slide-scale]');
+        const sc = scaleEl ? parseFloat(scaleEl.dataset.slideScale) || 1 : 1;
+        const sz = HANDLE_SZ / sc;
+        const half = sz / 2;
+        const posMap = {
+          nw: { left: -half, top: -half },
+          n:  { left: w/2 - half, top: -half },
+          ne: { left: w - half, top: -half },
+          e:  { left: w - half, top: ht/2 - half },
+          se: { left: w - half, top: ht - half },
+          s:  { left: w/2 - half, top: ht - half },
+          sw: { left: -half, top: ht - half },
+          w:  { left: -half, top: ht/2 - half },
+        };
+        const p = posMap[h];
+        return (
+          <div key={h} data-resize-handle="true" data-handle-dir={h}
+            style={{
+              position: 'absolute', left: p.left, top: p.top,
+              width: sz, height: sz,
+              background: '#fff', border: '1.5px solid #4a90d9',
+              borderRadius: 2, cursor: HANDLE_CURSOR[h],
+              zIndex: 10, touchAction: 'none',
+            }} />
+        );
+      })}
+    </div>
   );
 };
 
@@ -1280,14 +1553,27 @@ export const TEMPLATES = {
   levelSectionTerminal: TplLevelSectionTerminal,
 };
 
-export const SlideView = ({ slide, idx, total, onChange, editable = true, showMeta = true }) => {
+export const SlideView = ({ slide, idx, total, onChange, editable = true, showMeta = true, scale = 1 }) => {
   const palette = themePalette(slide.theme);
   const Tpl = TEMPLATES[slide.template] || TplTwoColumn;
   return (
-    <div style={{
+    <div data-slide-scale={scale} style={{
       position:'relative', width:SLIDE_W, height:SLIDE_H, overflow:'hidden',
       background:palette.bg, color:palette.ink, fontFamily:slideFont,
     }}>
+      {/* Dot grid - hidden by default, shown during drag */}
+      {editable && (
+        <svg data-dot-grid width={SLIDE_W} height={SLIDE_H} style={{
+          position:'absolute', inset:0, pointerEvents:'none', opacity:0, transition:'opacity 150ms ease', zIndex:1000,
+        }}>
+          <defs>
+            <pattern id="tplDotGrid" width="20" height="20" patternUnits="userSpaceOnUse">
+              <circle cx="10" cy="10" r="1" fill={palette.bg === '#0a0a0a' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.3)'} />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#tplDotGrid)" />
+        </svg>
+      )}
       <Tpl slide={slide} onChange={onChange} palette={palette} editable={editable}/>
       {showMeta && <Meta slide={slide} palette={palette} idx={idx} total={total} onChange={onChange} editable={editable}/>}
     </div>

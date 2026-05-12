@@ -4,6 +4,9 @@ const slide = (overrides) => ({
   template: 'twoColumn',
   fields: {},
   meta: { brand: 'Editor Cluster' },
+  elements: [],
+  globalHeader: true,
+  globalFooter: true,
   ...overrides,
 });
 
