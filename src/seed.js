@@ -26,7 +26,7 @@ const SLIDE_PROFILE = slide({
       { label:'KEY INSIGHT', value:'A company where employees use ChatGPT to summarize meetings is not the same as one where AI agents query systems of record and take bounded action', badge:'CORE THESIS' },
     ],
   },
-  meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026' },
+  meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'May— 2026' },
 });
 
 const SLIDE_LEVEL_GRID = slide({
@@ -42,7 +42,7 @@ const SLIDE_LEVEL_GRID = slide({
       { id:'L5', title:'Self-Driving', desc:'Autonomous operating loops. Humans govern strategy & exceptions.' },
     ],
   },
-  meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026' },
+  meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'May— 2026' },
 });
 
 const SLIDE_L0 = slide({
@@ -62,7 +62,7 @@ const SLIDE_L0 = slide({
     ],
     diagnostic:'"If we turned off every AI tool tomorrow, would anyone\'s job change?"',
   },
-  meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026' },
+  meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'May— 2026' },
 });
 
 const SLIDE_L1 = slide({
@@ -82,7 +82,7 @@ const SLIDE_L1 = slide({
     ],
     diagnostic:'"Is AI usage an individual habit or an organizational capability?"',
   },
-  meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026' },
+  meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'May— 2026' },
 });
 
 const SLIDE_L2 = slide({
@@ -102,7 +102,7 @@ const SLIDE_L2 = slide({
     ],
     diagnostic:'"Can an AI workflow in one team trigger or feed a workflow in another?"',
   },
-  meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026' },
+  meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'May— 2026' },
 });
 
 const SLIDE_L3 = slide({
@@ -122,7 +122,7 @@ const SLIDE_L3 = slide({
     ],
     diagnostic:'"Has your org chart changed because of AI — not just your tool stack?"',
   },
-  meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026' },
+  meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'May— 2026' },
 });
 
 const SLIDE_L4 = slide({
@@ -142,7 +142,7 @@ const SLIDE_L4 = slide({
     ],
     diagnostic:'"Does our AI get better at its job without us manually improving it?"',
   },
-  meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026' },
+  meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'May— 2026' },
 });
 
 const SLIDE_L5 = slide({
@@ -162,7 +162,7 @@ const SLIDE_L5 = slide({
     ],
     diagnostic:'"If leadership took a month off, would operations degrade or continue?"',
   },
-  meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026' },
+  meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'May— 2026' },
 });
 
 const SLIDE_GRUNT_WORK = slide({
@@ -178,7 +178,7 @@ const SLIDE_GRUNT_WORK = slide({
       tag:'L3+ thinking',
     }},
   },
-  meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026' },
+  meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'May— 2026' },
 });
 
 const SLIDE_BA_REFLECTION = slide({
@@ -194,7 +194,7 @@ const SLIDE_BA_REFLECTION = slide({
       tag:'L2 → L3',
     }},
   },
-  meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026' },
+  meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'May— 2026' },
 });
 
 const SLIDE_SELF_IMPROVING = slide({
@@ -209,7 +209,7 @@ const SLIDE_SELF_IMPROVING = slide({
       { title:'Improve', body:'Generate fixes and deploy', accent:true },
     ]},
   },
-  meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026' },
+  meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'May— 2026' },
 });
 
 const SLIDE_PEOPLE = slide({
@@ -224,7 +224,7 @@ const SLIDE_PEOPLE = slide({
       tag:'Hiring signal',
     }},
   },
-  meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026' },
+  meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'May— 2026' },
 });
 
 const SLIDE_CLUSTER = slide({
@@ -241,7 +241,7 @@ const SLIDE_CLUSTER = slide({
       caption:'Cluster tools overview — Studio, DM, Editor Harmony, Platform, AI SC initiatives',
     }},
   },
-  meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026' },
+  meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'May— 2026' },
 });
 
 // ─── DIRECTION A: "The Ladder" ───────────────────────────────────────────────
@@ -259,7 +259,7 @@ export const DIRECTION_A = {
         blurb:'A framework for understanding where we are, where we\'re going, and what the jump to the next level actually requires.',
         tag:'Internal · All-Hands',
       },
-      meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026', bl:'Direction A: The Ladder' },
+      meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'Direction A: The Ladder' },
     }),
 
     // 2. Profile
@@ -281,7 +281,7 @@ export const DIRECTION_A = {
         title:'The Wall.<br/>L2 → L3.',
         body:'This is the hardest jump. It requires shared data models, integrated systems of record, and cross-team trust in AI actions. Most organizations stall here.',
       },
-      meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026', bl:'The inflection point' },
+      meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'The inflection point' },
     }),
 
     // 8-10. L3, L4, L5
@@ -305,7 +305,7 @@ export const DIRECTION_A = {
           tag:'Current state',
         }},
       },
-      meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026', bl:'Where we stand' },
+      meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'Where we stand' },
     }),
 
     // 12. Evidence
@@ -350,7 +350,7 @@ export const DIRECTION_B = {
         blurb:'We use AI every day. But has it actually changed how we work — or just how we feel about work?',
         tag:'Internal · All-Hands',
       },
-      meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026', bl:'Direction B: Mirror, then Model' },
+      meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'Direction B: Mirror, then Model' },
     }),
 
     // 2. Grunt work
@@ -370,7 +370,7 @@ export const DIRECTION_B = {
         title:'These are great.<br/>But would turning off<br/>our AI tools change<br/>anyone\'s actual job?',
         body:'If the answer is "not really" — we\'re performing AI adoption, not living it. Let\'s be honest about where we actually sit.',
       },
-      meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026', bl:'The honest question' },
+      meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'The honest question' },
     }),
 
     // 6. Ann Miura-Ko
@@ -393,7 +393,7 @@ export const DIRECTION_B = {
         title:'The Wall.<br/>L2 to L3<br/>is the hardest jump.',
         body:'It requires shared data models, integrated systems of record, and cross-team trust in AI actions. This is where transformation gets real — or stalls permanently.',
       },
-      meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026', bl:'The inflection' },
+      meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'The inflection' },
     }),
 
     // 11. L3 detail
@@ -414,7 +414,7 @@ export const DIRECTION_B = {
           tag:'Vision',
         }},
       },
-      meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026', bl:'L4-L5' },
+      meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'L4-L5' },
     }),
 
     // 13. People dynamics
@@ -453,7 +453,7 @@ export const DIRECTION_C = {
         blurb:'A diagnostic. Five levels. Four questions. One honest answer about where we stand — and what it takes to move.',
         tag:'Internal · Diagnostic',
       },
-      meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026', bl:'Direction C: The Diagnostic' },
+      meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'Direction C: The Diagnostic' },
     }),
 
     // 2. Profile
@@ -519,7 +519,7 @@ export const DIRECTION_C = {
           tag:'Current state',
         }},
       },
-      meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026', bl:'Evidence' },
+      meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'Evidence' },
     }),
 
     // 11. Diagnostic #4
@@ -550,7 +550,7 @@ export const DIRECTION_C = {
           { title:'Restructure', body:'Org shape follows AI capability', accent:true },
         ]},
       },
-      meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026', bl:'L3 for us' },
+      meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'L3 for us' },
     }),
 
     // 14. L4-L5 endgame
@@ -568,7 +568,7 @@ export const DIRECTION_C = {
           tag:'Future state',
         }},
       },
-      meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026', bl:'L4-L5' },
+      meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'L4-L5' },
     }),
 
     // 15. Grunt work
@@ -602,7 +602,7 @@ const SLIDE_PROFILE_MODERN = slide({
     insight:'A company where employees use ChatGPT to summarize meetings is not the same as one where AI agents query systems of record and take bounded action.',
     tags:['Stanford PhD','Forbes "Most Powerful"','Lyft · Okta · Twitch','Floodgate'],
   },
-  meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026' },
+  meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'May— 2026' },
 });
 
 // ─── Helper: generate terminal-style level split slides ──────────────────────
@@ -753,7 +753,7 @@ export const DIRECTION_D = {
         blurb:'L0 through L5. Each level broken down: signal, markers, tell, and diagnostic. Terminal style.',
         tag:'Internal · Deep Dive',
       },
-      meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026', bl:'Direction D: Terminal Split' },
+      meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'Direction D: Terminal Split' },
     }),
 
     // Profile (modern)
@@ -775,7 +775,7 @@ export const DIRECTION_D = {
     slide({
       theme:'yellow', template:'sectionDivider',
       fields:{ num:'!!', title:'The Wall.<br/>L2 → L3.', body:'This is the hardest jump. Most organizations stall here permanently.' },
-      meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026', bl:'Inflection point' },
+      meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'Inflection point' },
     }),
 
     // L3 (5 slides)
@@ -798,7 +798,7 @@ export const DIRECTION_D = {
         body:'Solid L2 with seeds of L3. Team-level AI that works — but stops at team walls. The jump is available but not automatic.',
         panel:{ kind:'accent', data:{ tone:'yellow', eyebrow:'Position', statement:'L2 → L3 is our next move.', tag:'Current' }},
       },
-      meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026' },
+      meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'May— 2026' },
     }),
 
     // Closing
@@ -831,7 +831,7 @@ export const DIRECTION_E = {
         blurb:'From theater to self-driving. Each level explored one dimension at a time. Clean, focused, one idea per slide.',
         tag:'Internal · Deep Dive',
       },
-      meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026', bl:'Direction E: Modern Split' },
+      meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'Direction E: Modern Split' },
     }),
 
     // Profile (modern)
@@ -853,7 +853,7 @@ export const DIRECTION_E = {
     slide({
       theme:'yellow', template:'sectionDivider',
       fields:{ num:'→', title:'The Wall.<br/>L2 to L3.', body:'The hardest jump. Requires shared data models, integrated systems of record, and cross-team trust in AI actions.' },
-      meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026', bl:'Inflection' },
+      meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'Inflection' },
     }),
 
     // L3 (5 slides)
@@ -876,7 +876,7 @@ export const DIRECTION_E = {
         body:'Solid L2 with seeds of L3. Team-level AI that works — but stops at team walls.',
         panel:{ kind:'accent', data:{ tone:'yellow', eyebrow:'Position', statement:'The jump to L3 is our next move.', tag:'Current state' }},
       },
-      meta:{ brand:'Editor Cluster', tr:'All-Hands · 05-2026' },
+      meta:{ brand:'Editor Cluster', tr:'All Hands', bl:'May— 2026' },
     }),
 
     // Evidence

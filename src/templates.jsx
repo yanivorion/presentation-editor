@@ -332,33 +332,27 @@ const Editable = ({ value, onChange, multiline, style, placeholder, editable = t
   );
 };
 
-// ─── Corner meta strip ────────────────────────────────────────────────────────
+// ─── Global header strip ─────────────────────────────────────────────────────
 const Meta = ({ slide, palette, idx, total, onChange, editable }) => {
-  const baseSty = {
-    fontSize:11, fontWeight:600, letterSpacing:'0.14em', textTransform:'uppercase',
-    color: palette.muted, position:'absolute', pointerEvents:'auto',
-  };
   const upd = (k,v) => onChange({ ...slide, meta: { ...slide.meta, [k]:v } });
   const m = slide.meta || {};
+  const headerFont = "'Neue Haas Grotesk Text Pro', 'Inter', sans-serif";
   return (
-    <>
-      <div style={{ ...baseSty, top:32, left:40, display:'flex', alignItems:'center', gap:8 }}>
-        <span style={{
-          width:18,height:18,border:`2px solid ${palette.ink}`,borderRadius:'50%',
-          display:'inline-flex',alignItems:'center',justifyContent:'center',
-          fontSize:10,fontWeight:900,color:palette.ink,
-        }}>H</span>
-        <Editable value={m.brand || 'Heuristics Tool'} onChange={v=>upd('brand',v)} editable={editable}
-          style={{ color:palette.ink, fontWeight:700, letterSpacing:'0.02em' }}/>
+    <div style={{
+      position:'absolute', top:0, left:0, right:0, height:36,
+      display:'flex', alignItems:'center', justifyContent:'space-between',
+      padding:'0 40px', pointerEvents:'auto', zIndex:50,
+    }}>
+      <Editable value={m.brand || 'Editor Cluster'} onChange={v=>upd('brand',v)} editable={editable}
+        style={{ fontSize:12, fontWeight:600, color:palette.ink, fontFamily:headerFont, letterSpacing:'0.01em' }}/>
+      <Editable value={m.tr || 'All Hands'} onChange={v=>upd('tr',v)} editable={editable}
+        style={{ fontSize:12, fontWeight:500, color:palette.ink, fontFamily:headerFont, letterSpacing:'0.01em' }}/>
+      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+        <span style={{ width:8, height:8, background:palette.ink, display:'inline-block' }}/>
+        <Editable value={m.bl || 'May— 2026'} onChange={v=>upd('bl',v)} editable={editable}
+          style={{ fontSize:12, fontWeight:500, color:palette.ink, fontFamily:headerFont, letterSpacing:'0.01em' }}/>
       </div>
-      <Editable value={m.tr || ''} onChange={v=>upd('tr',v)} editable={editable}
-        style={{ ...baseSty, top:32, right:40, textAlign:'right' }}/>
-      <Editable value={m.bl || ''} onChange={v=>upd('bl',v)} editable={editable}
-        style={{ ...baseSty, bottom:32, left:40 }}/>
-      <div style={{ ...baseSty, bottom:32, right:40, textAlign:'right' }}>
-        {String(idx+1).padStart(2,'0')} / {String(total).padStart(2,'0')}
-      </div>
-    </>
+    </div>
   );
 };
 
