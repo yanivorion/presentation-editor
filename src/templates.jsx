@@ -2,6 +2,9 @@ import React, { useEffect, useLayoutEffect, useRef, useState, useCallback, creat
 import { slideFont } from './ui.jsx';
 
 export const SelectionContext = createContext([]);
+export const SelectionSetContext = createContext(null);
+export const HiddenTplContext = createContext([]);
+export const TplGeometryContext = createContext({ geom: {}, setGeom: null });
 export const MultiDragContext = createContext(null);
 
 export function useMultiDragBus() {
@@ -51,23 +54,30 @@ const Editable = ({ value, onChange, multiline, style, placeholder, editable = t
   const [editing, setEditing] = useState(false);
   const [localSelected, setLocalSelected] = useState(false);
   const externalSelectedIds = useContext(SelectionContext);
+  const setExternalSelectedIds = useContext(SelectionSetContext);
+  const hiddenTplIds = useContext(HiddenTplContext);
+  const { geom: tplGeom, setGeom: setTplGeom } = useContext(TplGeometryContext);
   const multiDragBus = useContext(MultiDragContext);
   const wrapRef = useRef(null);
   const interactionRef = useRef(null);
-  const geomRef = useRef({ x: 0, y: 0 });
-  const sizeOverrideRef = useRef(null);
-  const [, forceUpdate] = useState(0);
   const idRef = useRef(null);
   if (idRef.current === null) idRef.current = `tpl_${++_editableCounter}`;
   const stableId = idRef.current;
+  const saved = tplGeom?.[stableId];
+  const geomRef = useRef(saved ? { x: saved.x || 0, y: saved.y || 0 } : { x: 0, y: 0 });
+  const sizeOverrideRef = useRef(saved?.size || null);
+  const [, forceUpdate] = useState(0);
 
   const selectedIdsRef = useRef(externalSelectedIds);
   selectedIdsRef.current = externalSelectedIds;
 
   // Multi-drag bus subscription
+  const setTplGeomRef = useRef(setTplGeom);
+  setTplGeomRef.current = setTplGeom;
   useEffect(() => {
     if (!multiDragBus) return;
-    return multiDragBus.subscribe((sourceId, dx, dy) => {
+    let pendingSave = null;
+    const unsub = multiDragBus.subscribe((sourceId, dx, dy) => {
       if (sourceId === stableId) return;
       if (!selectedIdsRef.current.includes(stableId)) return;
       const el = wrapRef.current;
@@ -75,7 +85,12 @@ const Editable = ({ value, onChange, multiline, style, placeholder, editable = t
       geomRef.current.x += dx;
       geomRef.current.y += dy;
       el.style.transform = `translate(${geomRef.current.x}px, ${geomRef.current.y}px)`;
+      clearTimeout(pendingSave);
+      pendingSave = setTimeout(() => {
+        if (setTplGeomRef.current) setTplGeomRef.current(stableId, { x: geomRef.current.x, y: geomRef.current.y, size: sizeOverrideRef.current });
+      }, 200);
     });
+    return () => { unsub(); clearTimeout(pendingSave); };
   }, [multiDragBus, stableId]);
 
   // Sync contentEditable value
@@ -87,10 +102,14 @@ const Editable = ({ value, onChange, multiline, style, placeholder, editable = t
     if (el.innerHTML !== next) el.innerHTML = next;
   }, [value, editable, editing]);
 
-  // ─── Imperatively apply size override (absolute positioning after resize) ───
+  // ─── Imperatively apply saved geometry (transform + size) ───
   useLayoutEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
+    const g = geomRef.current;
+    if (g.x !== 0 || g.y !== 0) {
+      el.style.transform = `translate(${g.x}px, ${g.y}px)`;
+    }
     const sov = sizeOverrideRef.current;
     if (sov) {
       el.style.position = 'absolute';
@@ -111,7 +130,15 @@ const Editable = ({ value, onChange, multiline, style, placeholder, editable = t
       const handleEl = e.target.closest?.('[data-resize-handle]');
       e.stopPropagation();
       e.preventDefault();
+      if (document.activeElement?.blur) document.activeElement.blur();
       setLocalSelected(true);
+      if (setExternalSelectedIds) {
+        if (e.shiftKey) {
+          setExternalSelectedIds(prev => prev.includes(stableId) ? prev : [...prev, stableId]);
+        } else {
+          setExternalSelectedIds([stableId]);
+        }
+      }
       el.setPointerCapture(e.pointerId);
 
       const scaleEl = el.closest('[data-slide-scale]');
@@ -215,6 +242,9 @@ const Editable = ({ value, onChange, multiline, style, placeholder, editable = t
       if (grid) grid.style.opacity = '0';
       interactionRef.current = null;
       try { el.releasePointerCapture(e.pointerId); } catch {}
+      if (setTplGeom) {
+        setTplGeom(stableId, { x: geomRef.current.x, y: geomRef.current.y, size: sizeOverrideRef.current });
+      }
       forceUpdate(n => n + 1);
     };
 
@@ -249,6 +279,8 @@ const Editable = ({ value, onChange, multiline, style, placeholder, editable = t
   }, [localSelected]);
 
   const handles = selected && editable ? HANDLE_DIRS : [];
+
+  if (hiddenTplIds && hiddenTplIds.includes(stableId)) return null;
 
   if (!editable) {
     return <Tag style={style} dangerouslySetInnerHTML={{ __html: value || '' }}/>;
@@ -348,7 +380,7 @@ const MetaField = ({ value, onChange, editable, style }) => {
   );
 };
 
-const Meta = ({ slide, palette, idx, total, onChange, editable }) => {
+export const Meta = ({ slide, palette, idx, total, onChange, editable }) => {
   const upd = (k,v) => onChange({ ...slide, meta: { ...slide.meta, [k]:v } });
   const m = slide.meta || {};
   const headerFont = "'Neue Haas Grotesk Text Pro', 'Inter', sans-serif";
@@ -1424,6 +1456,244 @@ const TplLevelDetail = ({ slide, onChange, palette, editable }) => {
   );
 };
 
+// ─── Profile: Magazine (large quote hero, sidebar bio) ───────────────────────
+const TplProfileMagazine = ({ slide, onChange, palette, editable }) => {
+  const f = slide.fields || {};
+  const upd = (k, v) => onChange({ ...slide, fields: { ...f, [k]:v } });
+  const rows = f.rows || [];
+  const updRow = (i, k, v) => { const next = rows.slice(); next[i] = { ...next[i], [k]:v }; upd('rows', next); };
+  return (
+    <div style={{ position:'absolute', inset:0, display:'grid', gridTemplateColumns:'1fr 380px' }}>
+      {/* Left: big quote */}
+      <div style={{ padding:'72px 56px', display:'flex', flexDirection:'column', justifyContent:'center', background:palette.bg }}>
+        <Editable value={f.quote || '"Quote"'} onChange={v=>upd('quote',v)} editable={editable} multiline
+          style={{ fontSize:42, fontWeight:300, fontStyle:'italic', lineHeight:1.25, letterSpacing:'-0.02em', color:palette.ink, marginBottom:32 }}/>
+        <div style={{ width:60, height:3, background:'#f5d023', marginBottom:24 }}/>
+        <Editable value={(rows[0]?.value) || 'Name'} onChange={v=>updRow(0,'value',v)} editable={editable}
+          style={{ fontSize:28, fontWeight:700, letterSpacing:'-0.01em', color:palette.ink, marginBottom:4 }}/>
+        <Editable value={(rows[1]?.value) || 'Role'} onChange={v=>updRow(1,'value',v)} editable={editable}
+          style={{ fontSize:15, fontWeight:400, color:palette.muted }}/>
+      </div>
+      {/* Right: details sidebar */}
+      <div style={{ background: palette.bg === '#0a0a0a' ? '#111' : '#f0efe8', padding:'72px 32px', display:'flex', flexDirection:'column', justifyContent:'center', gap:0 }}>
+        <div style={{ width:120, height:140, background:'#ddd', borderRadius:4, marginBottom:28, overflow:'hidden', flexShrink:0 }}>
+          {f.photoSrc && <img src={f.photoSrc} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>}
+        </div>
+        {rows.slice(2).map((row, i) => (
+          <div key={i} style={{ borderTop:'1px solid rgba(128,128,128,0.2)', padding:'14px 0' }}>
+            <Editable value={row.label || 'LABEL'} onChange={v=>updRow(i+2,'label',v)} editable={editable}
+              style={{ fontSize:10, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:palette.muted, marginBottom:4 }}/>
+            <Editable value={row.value || ''} onChange={v=>updRow(i+2,'value',v)} editable={editable}
+              style={{ fontSize:14, fontWeight: row.bold ? 700 : 400, lineHeight:1.4, color:palette.ink }}/>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ─── Profile: Centered (centered hero, minimal) ─────────────────────────────
+const TplProfileCentered = ({ slide, onChange, palette, editable }) => {
+  const f = slide.fields || {};
+  const upd = (k, v) => onChange({ ...slide, fields: { ...f, [k]:v } });
+  const rows = f.rows || [];
+  const updRow = (i, k, v) => { const next = rows.slice(); next[i] = { ...next[i], [k]:v }; upd('rows', next); };
+  return (
+    <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', textAlign:'center', padding:'60px 80px' }}>
+      <div style={{ width:90, height:90, borderRadius:'50%', background:'#ddd', marginBottom:24, overflow:'hidden', flexShrink:0 }}>
+        {f.photoSrc && <img src={f.photoSrc} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>}
+      </div>
+      <Editable value={(rows[0]?.value) || 'Name'} onChange={v=>updRow(0,'value',v)} editable={editable}
+        style={{ fontSize:48, fontWeight:700, letterSpacing:'-0.03em', lineHeight:1, color:palette.ink, marginBottom:8 }}/>
+      <Editable value={(rows[1]?.value) || 'Role'} onChange={v=>updRow(1,'value',v)} editable={editable}
+        style={{ fontSize:16, fontWeight:500, color:palette.muted, marginBottom:32, maxWidth:'50ch' }}/>
+      <Editable value={f.quote || '"Quote"'} onChange={v=>upd('quote',v)} editable={editable} multiline
+        style={{ fontSize:26, fontWeight:300, fontStyle:'italic', lineHeight:1.4, color:palette.ink, maxWidth:'60ch', marginBottom:32 }}/>
+      <div style={{ display:'flex', flexWrap:'wrap', gap:24, justifyContent:'center' }}>
+        {rows.slice(2).map((row, i) => (
+          <div key={i} style={{ textAlign:'center' }}>
+            <Editable value={row.label || 'LABEL'} onChange={v=>updRow(i+2,'label',v)} editable={editable}
+              style={{ fontSize:10, fontWeight:700, letterSpacing:'.12em', textTransform:'uppercase', color:palette.muted, marginBottom:4 }}/>
+            <Editable value={row.value || ''} onChange={v=>updRow(i+2,'value',v)} editable={editable}
+              style={{ fontSize:13, fontWeight:400, color:palette.ink, maxWidth:'18ch' }}/>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ─── Profile: Horizontal Cards (facts as card row) ──────────────────────────
+const TplProfileCards = ({ slide, onChange, palette, editable }) => {
+  const f = slide.fields || {};
+  const upd = (k, v) => onChange({ ...slide, fields: { ...f, [k]:v } });
+  const rows = f.rows || [];
+  const updRow = (i, k, v) => { const next = rows.slice(); next[i] = { ...next[i], [k]:v }; upd('rows', next); };
+  const cardBg = palette.bg === '#0a0a0a' ? '#161616' : '#fff';
+  const borderCol = palette.bg === '#0a0a0a' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+  return (
+    <div style={{ position:'absolute', inset:0, padding:'56px 48px', display:'flex', flexDirection:'column' }}>
+      {/* Top header */}
+      <div style={{ display:'flex', alignItems:'flex-start', gap:24, marginBottom:20 }}>
+        <div style={{ width:80, height:80, borderRadius:8, background:'#ddd', overflow:'hidden', flexShrink:0 }}>
+          {f.photoSrc && <img src={f.photoSrc} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>}
+        </div>
+        <div>
+          <Editable value={(rows[0]?.value) || 'Name'} onChange={v=>updRow(0,'value',v)} editable={editable}
+            style={{ fontSize:36, fontWeight:700, letterSpacing:'-0.02em', lineHeight:1.1, color:palette.ink }}/>
+          <Editable value={(rows[1]?.value) || 'Role'} onChange={v=>updRow(1,'value',v)} editable={editable}
+            style={{ fontSize:15, fontWeight:400, color:palette.muted, marginTop:4 }}/>
+        </div>
+      </div>
+      {/* Quote strip */}
+      <div style={{ background: palette.bg === '#0a0a0a' ? '#1a1a1a' : '#f8f7f2', borderRadius:8, padding:'20px 28px', marginBottom:24 }}>
+        <Editable value={f.quote || '"Quote"'} onChange={v=>upd('quote',v)} editable={editable} multiline
+          style={{ fontSize:20, fontWeight:400, fontStyle:'italic', lineHeight:1.4, color:palette.ink }}/>
+      </div>
+      {/* Cards grid */}
+      <div style={{ display:'grid', gridTemplateColumns:`repeat(${Math.min(rows.length - 2, 4)}, 1fr)`, gap:12, flex:1 }}>
+        {rows.slice(2).map((row, i) => (
+          <div key={i} style={{ background:cardBg, border:`1px solid ${borderCol}`, borderRadius:8, padding:'18px 16px', display:'flex', flexDirection:'column', gap:6 }}>
+            <Editable value={row.label || 'LABEL'} onChange={v=>updRow(i+2,'label',v)} editable={editable}
+              style={{ fontSize:10, fontWeight:700, letterSpacing:'.12em', textTransform:'uppercase', color:palette.muted }}/>
+            <Editable value={row.value || ''} onChange={v=>updRow(i+2,'value',v)} editable={editable} multiline
+              style={{ fontSize:14, fontWeight: row.bold ? 600 : 400, lineHeight:1.4, color:palette.ink }}/>
+            {row.badge && <span style={{ display:'inline-block', alignSelf:'flex-start', fontSize:9, fontWeight:700, letterSpacing:'.08em',
+              padding:'3px 8px', background:'#f5d023', color:'#1a1a1a', borderRadius:3, marginTop:4 }}>{row.badge}</span>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ─── Profile: Bold Split (full-bleed name, right details) ───────────────────
+const TplProfileBoldSplit = ({ slide, onChange, palette, editable }) => {
+  const f = slide.fields || {};
+  const upd = (k, v) => onChange({ ...slide, fields: { ...f, [k]:v } });
+  const rows = f.rows || [];
+  const updRow = (i, k, v) => { const next = rows.slice(); next[i] = { ...next[i], [k]:v }; upd('rows', next); };
+  return (
+    <div style={{ position:'absolute', inset:0, display:'grid', gridTemplateColumns:'1fr 1fr' }}>
+      {/* Left: oversized name */}
+      <div style={{ background:'#0a0a0a', padding:'56px 48px', display:'flex', flexDirection:'column', justifyContent:'flex-end' }}>
+        <Editable value={(rows[0]?.value) || 'Name'} onChange={v=>updRow(0,'value',v)} editable={editable}
+          style={{ fontSize:72, fontWeight:800, letterSpacing:'-0.04em', lineHeight:0.95, color:'#fff', marginBottom:16 }}/>
+        <Editable value={(rows[1]?.value) || 'Role'} onChange={v=>updRow(1,'value',v)} editable={editable}
+          style={{ fontSize:16, fontWeight:400, color:'rgba(255,255,255,0.5)' }}/>
+      </div>
+      {/* Right: quote + rows */}
+      <div style={{ padding:'56px 40px', display:'flex', flexDirection:'column', justifyContent:'center', gap:0 }}>
+        <Editable value={f.quote || '"Quote"'} onChange={v=>upd('quote',v)} editable={editable} multiline
+          style={{ fontSize:22, fontWeight:300, fontStyle:'italic', lineHeight:1.35, color:palette.ink, marginBottom:32, paddingBottom:24, borderBottom:`1px solid ${palette.bg === '#0a0a0a' ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)'}` }}/>
+        {rows.slice(2).map((row, i) => (
+          <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', padding:'12px 0', borderBottom:`1px solid ${palette.bg === '#0a0a0a' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}` }}>
+            <Editable value={row.label || 'LABEL'} onChange={v=>updRow(i+2,'label',v)} editable={editable}
+              style={{ fontSize:10, fontWeight:700, letterSpacing:'.12em', textTransform:'uppercase', color:palette.muted, flexShrink:0, width:100 }}/>
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <Editable value={row.value || ''} onChange={v=>updRow(i+2,'value',v)} editable={editable}
+                style={{ fontSize:14, fontWeight: row.bold ? 700 : 400, color:palette.ink, textAlign:'right' }}/>
+              {row.badge && <span style={{ fontSize:9, fontWeight:700, letterSpacing:'.08em', padding:'3px 8px', background:'#f5d023', color:'#1a1a1a' }}>{row.badge}</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ─── Profile: Dossier (classified-file aesthetic) ────────────────────────────
+const TplProfileDossier = ({ slide, onChange, palette, editable }) => {
+  const f = slide.fields || {};
+  const upd = (k, v) => onChange({ ...slide, fields: { ...f, [k]:v } });
+  const rows = f.rows || [];
+  const updRow = (i, k, v) => { const next = rows.slice(); next[i] = { ...next[i], [k]:v }; upd('rows', next); };
+  return (
+    <div style={{ position:'absolute', inset:0, background:'#faf9f4', fontFamily:"'Courier New', monospace" }}>
+      {/* Top classification bar */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'20px 40px', borderBottom:'2px solid #1a1a1a' }}>
+        <span style={{ fontSize:11, fontWeight:700, letterSpacing:'.2em', color:'#c00' }}>CLASSIFIED</span>
+        <Editable value={f.command || '$ whois ann_miura-ko'} onChange={v=>upd('command',v)} editable={editable}
+          style={{ fontSize:13, fontWeight:400, color:'#666', fontFamily:'inherit' }}/>
+      </div>
+      <div style={{ padding:'32px 40px', display:'grid', gridTemplateColumns:'160px 1fr', gap:40 }}>
+        {/* Photo */}
+        <div>
+          <div style={{ width:160, height:200, background:'#e8e6de', border:'1px solid #999', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden' }}>
+            {f.photoSrc ? <img src={f.photoSrc} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }}/> :
+              <span style={{ fontSize:10, color:'#999', letterSpacing:'.1em' }}>PHOTO</span>}
+          </div>
+          <div style={{ marginTop:12, fontSize:10, color:'#999', letterSpacing:'.1em', textAlign:'center' }}>FILE PHOTO</div>
+        </div>
+        {/* Content */}
+        <div style={{ display:'flex', flexDirection:'column', gap:0 }}>
+          <Editable value={(rows[0]?.value) || 'Name'} onChange={v=>updRow(0,'value',v)} editable={editable}
+            style={{ fontSize:32, fontWeight:700, color:'#1a1a1a', fontFamily:'inherit', marginBottom:4, letterSpacing:'-0.01em' }}/>
+          <Editable value={(rows[1]?.value) || 'Role'} onChange={v=>updRow(1,'value',v)} editable={editable}
+            style={{ fontSize:14, fontWeight:400, color:'#666', fontFamily:'inherit', marginBottom:20 }}/>
+          <div style={{ padding:'16px 20px', background:'#f0efe8', border:'1px solid #ddd', marginBottom:20 }}>
+            <Editable value={f.quote || '"Quote"'} onChange={v=>upd('quote',v)} editable={editable} multiline
+              style={{ fontSize:16, fontStyle:'italic', lineHeight:1.4, color:'#1a1a1a', fontFamily:'inherit' }}/>
+          </div>
+          {rows.slice(2).map((row, i) => (
+            <div key={i} style={{ display:'grid', gridTemplateColumns:'110px 1fr', padding:'10px 0', borderTop:'1px dotted #ccc' }}>
+              <Editable value={row.label || 'LABEL'} onChange={v=>updRow(i+2,'label',v)} editable={editable}
+                style={{ fontSize:10, fontWeight:400, letterSpacing:'.12em', textTransform:'uppercase', color:'#999', fontFamily:'inherit' }}/>
+              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                <Editable value={row.value || ''} onChange={v=>updRow(i+2,'value',v)} editable={editable}
+                  style={{ fontSize:14, fontWeight: row.bold ? 700 : 400, color:'#1a1a1a', fontFamily:'inherit' }}/>
+                {row.badge && <span style={{ fontSize:9, fontWeight:700, letterSpacing:'.08em', padding:'2px 8px', background:'#f5d023', color:'#1a1a1a', fontFamily:'sans-serif' }}>{row.badge}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Profile: Minimal (stark, large quote, bottom details) ──────────────────
+const TplProfileMinimal = ({ slide, onChange, palette, editable }) => {
+  const f = slide.fields || {};
+  const upd = (k, v) => onChange({ ...slide, fields: { ...f, [k]:v } });
+  const rows = f.rows || [];
+  const updRow = (i, k, v) => { const next = rows.slice(); next[i] = { ...next[i], [k]:v }; upd('rows', next); };
+  const insightRow = rows.find(r => r.badge);
+  return (
+    <div style={{ position:'absolute', inset:0, padding:'72px 56px', display:'flex', flexDirection:'column', justifyContent:'space-between' }}>
+      {/* Top: name + role */}
+      <div>
+        <Editable value={(rows[0]?.value) || 'Name'} onChange={v=>updRow(0,'value',v)} editable={editable}
+          style={{ fontSize:14, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:palette.muted }}/>
+        <Editable value={(rows[1]?.value) || 'Role'} onChange={v=>updRow(1,'value',v)} editable={editable}
+          style={{ fontSize:14, fontWeight:400, color:palette.muted, marginTop:4 }}/>
+      </div>
+      {/* Center: hero quote */}
+      <Editable value={f.quote || '"Quote"'} onChange={v=>upd('quote',v)} editable={editable} multiline
+        style={{ fontSize:52, fontWeight:300, fontStyle:'italic', lineHeight:1.15, letterSpacing:'-0.03em', color:palette.ink, maxWidth:'85%' }}/>
+      {/* Bottom: key insight + metadata row */}
+      <div>
+        {insightRow && (
+          <div style={{ borderLeft:'4px solid #f5d023', paddingLeft:16, marginBottom:20 }}>
+            <Editable value={insightRow.value || ''} onChange={v=>updRow(rows.indexOf(insightRow),'value',v)} editable={editable} multiline
+              style={{ fontSize:16, fontWeight:500, lineHeight:1.45, color:palette.ink }}/>
+          </div>
+        )}
+        <div style={{ display:'flex', gap:32, borderTop:`1px solid ${palette.bg === '#0a0a0a' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, paddingTop:16 }}>
+          {rows.filter(r => !r.badge && r !== rows[0] && r !== rows[1]).map((row, i) => (
+            <div key={i}>
+              <Editable value={row.label || 'LABEL'} onChange={v=>updRow(rows.indexOf(row),'label',v)} editable={editable}
+                style={{ fontSize:9, fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:palette.muted, marginBottom:4 }}/>
+              <Editable value={row.value || ''} onChange={v=>updRow(rows.indexOf(row),'value',v)} editable={editable}
+                style={{ fontSize:13, fontWeight:400, color:palette.ink }}/>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Profile Modern (clean typography, no terminal) ──────────────────────────
 const TplProfileModern = ({ slide, onChange, palette, editable }) => {
   const f = slide.fields || {};
@@ -1549,6 +1819,340 @@ const TplLevelSectionTerminal = ({ slide, onChange, palette, editable }) => {
   );
 };
 
+// ─── Team Initiatives Table ──────────────────────────────────────────────────
+const TplTeamInitiatives = ({ slide, onChange, palette, editable }) => {
+  const f = slide.fields || {};
+  const upd = (k, v) => onChange({ ...slide, fields: { ...f, [k]:v } });
+  const rows = f.rows || [];
+  const updRow = (i, k, v) => { const next = rows.slice(); next[i] = { ...next[i], [k]:v }; upd('rows', next); };
+  const cols = f.columns || ['Initiative', 'Description', 'Status'];
+  const colWidths = f.colWidths || ['16%', '66%', '18%'];
+
+  const hdrBg = palette.bg === '#0a0a0a' ? '#1a237e' : '#1a237e';
+  const hdrColor = '#fff';
+  const rowBg = (i) => i % 2 === 0
+    ? (palette.bg === '#0a0a0a' ? 'rgba(255,255,255,0.04)' : 'rgba(200,210,240,0.2)')
+    : 'transparent';
+  const borderColor = palette.bg === '#0a0a0a' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
+
+  return (
+    <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column',
+      background: 'linear-gradient(180deg, rgba(180,200,240,0.25) 0%, rgba(200,210,240,0.12) 100%)',
+      padding:'28px 36px 36px',
+    }}>
+      {/* Team name */}
+      <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:18 }}>
+        <Editable value={f.teamName || 'Team'} onChange={v=>upd('teamName',v)} editable={editable}
+          style={{ fontSize:36, fontWeight:700, letterSpacing:'-0.01em', color:palette.ink }}/>
+        {f.icon && <span style={{ fontSize:28 }}>{f.icon}</span>}
+      </div>
+
+      {/* Table */}
+      <div style={{ flex:1, display:'flex', flexDirection:'column', border:`1px solid ${borderColor}`, borderRadius:6, overflow:'hidden' }}>
+        {/* Header row */}
+        <div style={{ display:'flex', background:hdrBg, flexShrink:0 }}>
+          {cols.map((col, ci) => (
+            <div key={ci} style={{ width:colWidths[ci], padding:'10px 16px', fontWeight:700, fontSize:14,
+              letterSpacing:'.02em', color:hdrColor,
+              borderRight: ci < cols.length - 1 ? '1px solid rgba(255,255,255,0.15)' : 'none' }}>
+              <Editable value={col} onChange={v=>{ const nc = cols.slice(); nc[ci]=v; upd('columns',nc); }}
+                editable={editable} style={{ color:hdrColor, fontWeight:700, fontSize:14 }}/>
+            </div>
+          ))}
+        </div>
+
+        {/* Data rows */}
+        <div style={{ flex:1, overflowY:'auto' }}>
+          {rows.map((row, ri) => (
+            <div key={ri} style={{ display:'flex', borderBottom:`1px solid ${borderColor}`, background:rowBg(ri) }}>
+              <div style={{ width:colWidths[0], padding:'10px 16px', borderRight:`1px solid ${borderColor}` }}>
+                <Editable value={row.initiative || ''} onChange={v=>updRow(ri,'initiative',v)} editable={editable}
+                  style={{ fontSize:13, fontWeight:700, color:palette.ink, lineHeight:1.4 }}/>
+              </div>
+              <div style={{ width:colWidths[1], padding:'10px 16px', borderRight:`1px solid ${borderColor}` }}>
+                <Editable value={row.description || ''} onChange={v=>updRow(ri,'description',v)} editable={editable} multiline
+                  style={{ fontSize:13, fontWeight:400, color:palette.ink, lineHeight:1.5, opacity:0.85 }}/>
+              </div>
+              <div style={{ width:colWidths[2], padding:'10px 16px' }}>
+                <Editable value={row.status || ''} onChange={v=>updRow(ri,'status',v)} editable={editable}
+                  style={{ fontSize:13, fontWeight:600, color: row.statusColor || palette.ink, lineHeight:1.4 }}/>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Sticky Mobile / Spectrum deck style (PDF design system) ─────────────────
+const SPECTRUM_ORANGE = '#FF4500';
+const SPECTRUM_RED = '#FF003C';
+const SPECTRUM_BG = '#F5F5F5';
+const SPECTRUM_HEADING = "'Neue Haas Grotesk Display Pro', 'Inter', sans-serif";
+const SPECTRUM_BODY = "'Neue Haas Grotesk Text Pro', 'Inter', sans-serif";
+
+const SpectrumMark = () => (
+  <span style={{ color: SPECTRUM_ORANGE, fontSize: 10, marginRight: 6 }}>■</span>
+);
+
+const formatSpectrumLevel = (id) => {
+  const n = String(id || '0').replace(/\D/g, '');
+  return `LEVEL ${n.padStart(2, '0')}`;
+};
+
+const renderHighlightedQuote = (quote, highlights, editable, onChange) => {
+  const terms = (highlights || '').split(/[,|]/).map(s => s.trim()).filter(Boolean);
+  if (!terms.length) {
+    return (
+      <Editable value={quote || ''} onChange={onChange} editable={editable} multiline
+        style={{ fontSize: 52, fontWeight: 700, lineHeight: 1.12, letterSpacing: '-0.03em', color: '#0a0a0a', fontFamily: SPECTRUM_HEADING }}/>
+    );
+  }
+  if (!editable) {
+    const parts = [];
+    let rest = quote || '';
+    terms.forEach((term, i) => {
+      const idx = rest.toLowerCase().indexOf(term.toLowerCase());
+      if (idx === -1) return;
+      if (idx > 0) parts.push(<span key={`pre-${i}`}>{rest.slice(0, idx)}</span>);
+      parts.push(
+        <span key={`hi-${i}`} style={{ color: SPECTRUM_ORANGE, textDecoration: 'underline', textDecorationThickness: 3, textUnderlineOffset: 4 }}>
+          {rest.slice(idx, idx + term.length)}
+        </span>
+      );
+      rest = rest.slice(idx + term.length);
+    });
+    if (rest) parts.push(<span key="tail">{rest}</span>);
+    return <div style={{ fontSize: 52, fontWeight: 700, lineHeight: 1.12, letterSpacing: '-0.03em', color: '#0a0a0a', fontFamily: SPECTRUM_HEADING }}>{parts}</div>;
+  }
+  return (
+    <Editable value={quote || ''} onChange={onChange} editable={editable} multiline
+      style={{ fontSize: 52, fontWeight: 700, lineHeight: 1.12, letterSpacing: '-0.03em', color: '#0a0a0a', fontFamily: SPECTRUM_HEADING }}/>
+  );
+};
+
+const TplStickyMobileCover = ({ slide, onChange, editable }) => {
+  const f = slide.fields || {};
+  const upd = (k, v) => onChange({ ...slide, fields: { ...f, [k]: v } });
+  const titlePrimary = f.titlePrimary || 'Mobile Algo';
+  const titleSecondary = f.titleSecondary || 'Sticky Expressions';
+  return (
+    <div style={{ position: 'absolute', inset: 0, background: SPECTRUM_RED, color: '#fff', fontFamily: SPECTRUM_BODY, padding: '40px 48px', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', alignItems: 'start', fontSize: 11, fontWeight: 600, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+        <div>
+          <Editable value={f.editorLabel || 'Editor'} onChange={v => upd('editorLabel', v)} editable={editable}
+            style={{ display: 'block', color: '#fff', fontFamily: 'inherit' }}/>
+          <Editable value={f.designersLabel || 'Designers'} onChange={v => upd('designersLabel', v)} editable={editable}
+            style={{ display: 'block', marginTop: 8, color: '#fff', fontFamily: 'inherit' }}/>
+        </div>
+        <Editable value={f.centerTitle || 'Sticky on Mobile'} onChange={v => upd('centerTitle', v)} editable={editable}
+          style={{ textAlign: 'center', color: '#fff', fontFamily: 'inherit' }}/>
+        <div style={{ textAlign: 'right' }}>
+          <Editable value={f.dateLabel || 'Date'} onChange={v => upd('dateLabel', v)} editable={editable}
+            style={{ display: 'block', color: '#fff', fontFamily: 'inherit' }}/>
+          <Editable value={f.date || 'May 2026'} onChange={v => upd('date', v)} editable={editable}
+            style={{ display: 'block', marginTop: 8, color: '#fff', fontFamily: 'inherit', textTransform: 'none', letterSpacing: '.04em' }}/>
+        </div>
+      </div>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', paddingBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: '0 16px', lineHeight: 0.95 }}>
+          <Editable value={titlePrimary} onChange={v => upd('titlePrimary', v)} editable={editable}
+            style={{ fontSize: 120, fontWeight: 700, letterSpacing: '-0.04em', color: '#fff', fontFamily: SPECTRUM_HEADING }}/>
+          <span style={{ fontSize: 72, fontWeight: 300, color: '#fff', opacity: 0.9 }}>/</span>
+          <Editable value={titleSecondary} onChange={v => upd('titleSecondary', v)} editable={editable}
+            style={{ fontSize: 56, fontWeight: 700, letterSpacing: '-0.02em', color: '#fff', fontFamily: SPECTRUM_HEADING }}/>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const TplSpectrumProfile = ({ slide, onChange, editable }) => {
+  const f = slide.fields || {};
+  const upd = (k, v) => onChange({ ...slide, fields: { ...f, [k]: v } });
+  const rows = f.rows || [];
+  const updRow = (i, k, v) => { const next = rows.slice(); next[i] = { ...next[i], [k]: v }; upd('rows', next); };
+  return (
+    <div style={{ position: 'absolute', inset: '36px 0 0', background: '#fff', fontFamily: SPECTRUM_BODY, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: '48px 56px 32px', borderBottom: '1px solid #e8e8e8' }}>
+        {renderHighlightedQuote(f.quote, f.highlightWords, editable, v => upd('quote', v))}
+      </div>
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '280px 1fr', gap: 48, padding: '40px 56px' }}>
+        <div>
+          <div style={{ width: 160, height: 160, borderRadius: '50%', overflow: 'hidden', background: '#f0e0d8', marginBottom: 20 }}>
+            {f.photoSrc && <img src={f.photoSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>}
+          </div>
+          <Editable value={f.name || 'Name'} onChange={v => upd('name', v)} editable={editable}
+            style={{ fontSize: 22, fontWeight: 700, color: SPECTRUM_ORANGE, marginBottom: 8, fontFamily: SPECTRUM_HEADING }}/>
+          <Editable value={f.role || 'Role'} onChange={v => upd('role', v)} editable={editable} multiline
+            style={{ fontSize: 14, fontWeight: 400, color: '#666', lineHeight: 1.5 }}/>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr', gap: '32px 48px' }}>
+          {rows.slice(0, 4).map((row, i) => (
+            <div key={i}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <Editable value={row.label || 'LABEL'} onChange={v => updRow(i, 'label', v)} editable={editable}
+                  style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', color: SPECTRUM_ORANGE }}/>
+                {row.badge && (
+                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.08em', padding: '3px 8px', background: SPECTRUM_ORANGE, color: '#fff', textTransform: 'uppercase' }}>
+                    {row.badge}
+                  </span>
+                )}
+              </div>
+              <Editable value={row.value || ''} onChange={v => updRow(i, 'value', v)} editable={editable} multiline
+                style={{ fontSize: 15, fontWeight: 400, color: '#333', lineHeight: 1.55 }}/>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const TplSpectrumLevel = ({ slide, onChange, editable }) => {
+  const f = slide.fields || {};
+  const upd = (k, v) => onChange({ ...slide, fields: { ...f, [k]: v } });
+  const levelLabel = f.levelLabel || formatSpectrumLevel(f.levelId || 'L0');
+  const colLabel = (label, value, onLabel, onValue) => (
+    <div style={{ padding: '24px 28px', borderRight: '1px solid #e0e0e0', display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0 }}>
+      <Editable value={label} onChange={onLabel} editable={editable}
+        style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', color: SPECTRUM_ORANGE, fontFamily: SPECTRUM_BODY }}/>
+      <Editable value={value} onChange={onValue} editable={editable} multiline
+        style={{ fontSize: 14, fontWeight: 400, color: '#333', lineHeight: 1.55, fontFamily: SPECTRUM_BODY }}/>
+    </div>
+  );
+  return (
+    <div style={{ position: 'absolute', inset: '36px 0 0', background: SPECTRUM_BG, fontFamily: SPECTRUM_BODY, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr 1.4fr', borderBottom: '1px solid #e0e0e0', minHeight: 280 }}>
+        <div style={{ padding: '28px 32px', borderRight: '1px solid #e0e0e0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {f.badge && (
+            <span style={{ alignSelf: 'flex-start', fontSize: 9, fontWeight: 700, letterSpacing: '.08em', padding: '4px 10px', background: SPECTRUM_ORANGE, color: '#fff', textTransform: 'uppercase' }}>
+              {f.badge}
+            </span>
+          )}
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: SPECTRUM_ORANGE }}>
+            <SpectrumMark/>
+            <Editable value={levelLabel} onChange={v => upd('levelLabel', v)} editable={editable}
+              style={{ display: 'inline', color: SPECTRUM_ORANGE, fontFamily: 'inherit' }}/>
+          </div>
+          <Editable value={f.levelName || 'Level Name'} onChange={v => upd('levelName', v)} editable={editable}
+            style={{ fontSize: 36, fontWeight: 700, lineHeight: 1.1, letterSpacing: '-0.02em', color: '#0a0a0a', fontFamily: SPECTRUM_HEADING }}/>
+        </div>
+        <div style={{ padding: '28px 32px', borderRight: '1px solid #e0e0e0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: SPECTRUM_ORANGE }}>
+            <SpectrumMark/>SIGNAL
+          </div>
+          <Editable value={f.signal || ''} onChange={v => upd('signal', v)} editable={editable} multiline
+            style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.2, color: '#0a0a0a', fontFamily: SPECTRUM_HEADING }}/>
+        </div>
+        <div style={{ padding: '28px 32px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: SPECTRUM_ORANGE }}>
+            <SpectrumMark/>DESC
+          </div>
+          <Editable value={f.desc || ''} onChange={v => upd('desc', v)} editable={editable} multiline
+            style={{ fontSize: 16, fontWeight: 400, lineHeight: 1.55, color: '#333' }}/>
+        </div>
+      </div>
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1.15fr', minHeight: 0 }}>
+        {colLabel(f.markersLabel || 'MARKERS', f.markers || '', v => upd('markersLabel', v), v => upd('markers', v))}
+        {colLabel(f.tellLabel || 'THE TELL', f.tell || '', v => upd('tellLabel', v), v => upd('tell', v))}
+        {colLabel(f.thirdLabel || 'THE WALL', f.thirdValue || '', v => upd('thirdLabel', v), v => upd('thirdValue', v))}
+        <div style={{ background: SPECTRUM_ORANGE, padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 16, justifyContent: 'center' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', color: '#fff' }}>DIAGNOSTIC</span>
+          <Editable value={f.diagnostic || ''} onChange={v => upd('diagnostic', v)} editable={editable} multiline
+            style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.35, color: '#fff', fontFamily: SPECTRUM_HEADING }}/>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const TplClusterExamples = ({ slide, onChange, editable }) => {
+  const f = slide.fields || {};
+  const upd = (k, v) => onChange({ ...slide, fields: { ...f, [k]: v } });
+  const cards = f.cards || [];
+  const updCard = (i, k, v) => { const next = cards.slice(); next[i] = { ...next[i], [k]: v }; upd('cards', next); };
+  const titleBefore = f.titleBefore || 'Examples from the';
+  const titleAccent = f.titleAccent || 'Cluster';
+  return (
+    <div style={{ position: 'absolute', inset: '36px 0 0', background: SPECTRUM_BG, fontFamily: SPECTRUM_BODY, padding: '40px 56px', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ marginBottom: 32 }}>
+        <span style={{ fontSize: 48, fontWeight: 700, color: '#0a0a0a', fontFamily: SPECTRUM_HEADING }}>{titleBefore} </span>
+        <Editable value={titleAccent} onChange={v => upd('titleAccent', v)} editable={editable}
+          style={{ fontSize: 48, fontWeight: 700, color: SPECTRUM_ORANGE, fontFamily: SPECTRUM_HEADING }}/>
+      </div>
+      <div style={{ position: 'relative', flex: 1, minHeight: 380 }}>
+        {cards.slice(0, 4).map((card, i) => (
+          <div key={i} style={{
+            position: 'absolute',
+            top: i * 36,
+            left: i * 48,
+            right: Math.max(0, (3 - i) * 48),
+            background: '#e8eaf6',
+            borderTop: '5px solid #1a237e',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
+            padding: '20px 24px',
+            display: 'grid',
+            gridTemplateColumns: '160px 1fr 120px',
+            gap: 20,
+            alignItems: 'start',
+            zIndex: i + 1,
+          }}>
+            <Editable value={card.title || 'Initiative'} onChange={v => updCard(i, 'title', v)} editable={editable}
+              style={{ fontSize: 16, fontWeight: 700, color: '#0a0a0a', fontFamily: SPECTRUM_HEADING }}/>
+            <Editable value={card.description || ''} onChange={v => updCard(i, 'description', v)} editable={editable} multiline
+              style={{ fontSize: 13, color: '#333', lineHeight: 1.5 }}/>
+            {card.status != null && (
+              <Editable value={card.status || ''} onChange={v => updCard(i, 'status', v)} editable={editable}
+                style={{ fontSize: 13, color: '#555', textAlign: 'right' }}/>
+            )}
+          </div>
+        ))}
+      </div>
+      <Editable value={f.linkText || 'Link to full presentation'} onChange={v => upd('linkText', v)} editable={editable}
+        style={{ marginTop: 16, fontSize: 14, fontWeight: 700, color: SPECTRUM_ORANGE, textDecoration: 'underline', textUnderlineOffset: 4 }}/>
+    </div>
+  );
+};
+
+const TplSpectrumLevelList = ({ slide, onChange, editable }) => {
+  const f = slide.fields || {};
+  const upd = (k, v) => onChange({ ...slide, fields: { ...f, [k]: v } });
+  const items = f.items || [];
+  const updItem = (i, k, v) => { const next = items.slice(); next[i] = { ...next[i], [k]: v }; upd('items', next); };
+  return (
+    <div style={{ position: 'absolute', inset: '36px 0 0', background: SPECTRUM_BG, fontFamily: SPECTRUM_BODY, padding: '40px 56px', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ marginBottom: 32 }}>
+        <Editable value={f.titleBefore || 'All'} onChange={v => upd('titleBefore', v)} editable={editable}
+          style={{ fontSize: 52, fontWeight: 700, color: '#0a0a0a', fontFamily: SPECTRUM_HEADING }}/>
+        <Editable value={f.titleAccent || 'Levels'} onChange={v => upd('titleAccent', v)} editable={editable}
+          style={{ fontSize: 52, fontWeight: 700, color: SPECTRUM_ORANGE, fontFamily: SPECTRUM_HEADING }}/>
+      </div>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        {items.slice(0, 6).map((item, i) => (
+          <div key={i} style={{
+            display: 'grid',
+            gridTemplateColumns: '120px 280px 1fr',
+            gap: 24,
+            alignItems: 'baseline',
+            padding: '22px 0',
+            borderTop: i === 0 ? '1px solid #e0e0e0' : 'none',
+            borderBottom: '1px solid #e0e0e0',
+          }}>
+            <Editable value={item.level || formatSpectrumLevel(i)} onChange={v => updItem(i, 'level', v)} editable={editable}
+              style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: SPECTRUM_ORANGE }}/>
+            <Editable value={item.name || 'Level name'} onChange={v => updItem(i, 'name', v)} editable={editable}
+              style={{ fontSize: 28, fontWeight: 700, color: '#0a0a0a', fontFamily: SPECTRUM_HEADING }}/>
+            <Editable value={item.comment || '// Description'} onChange={v => updItem(i, 'comment', v)} editable={editable}
+              style={{ fontSize: 16, color: '#888', lineHeight: 1.45 }}/>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 // ─── Slide renderer ──────────────────────────────────────────────────────────
 export const TEMPLATES = {
   cover:              TplCover,
@@ -1567,15 +2171,28 @@ export const TEMPLATES = {
   horizontalProcess:  TplHorizontalProcess,
   fourColumnProcess:  TplFourColumnProcess,
   profileCard:        TplProfileCard,
+  profileMagazine:    TplProfileMagazine,
+  profileCentered:    TplProfileCentered,
+  profileCards:       TplProfileCards,
+  profileBoldSplit:   TplProfileBoldSplit,
+  profileDossier:     TplProfileDossier,
+  profileMinimal:     TplProfileMinimal,
   levelGrid:          TplLevelGrid,
   levelDetail:        TplLevelDetail,
   profileModern:      TplProfileModern,
   levelIntro:         TplLevelIntro,
   levelSection:       TplLevelSection,
   levelSectionTerminal: TplLevelSectionTerminal,
+  teamInitiatives: TplTeamInitiatives,
+  stickyMobileCover: TplStickyMobileCover,
+  spectrumProfile: TplSpectrumProfile,
+  spectrumLevel: TplSpectrumLevel,
+  clusterExamples: TplClusterExamples,
+  spectrumLevelList: TplSpectrumLevelList,
 };
 
-export const SlideView = ({ slide, idx, total, onChange, editable = true, showMeta = true, scale = 1 }) => {
+export const SlideView = ({ slide, idx, total, onChange, editable = true, showMeta = true, externalMeta = false, scale = 1 }) => {
+  _editableCounter = 0;
   const palette = themePalette(slide.theme);
   const Tpl = TEMPLATES[slide.template] || TplTwoColumn;
   return (
@@ -1597,7 +2214,9 @@ export const SlideView = ({ slide, idx, total, onChange, editable = true, showMe
         </svg>
       )}
       <Tpl slide={slide} onChange={onChange} palette={palette} editable={editable}/>
-      {showMeta && <Meta slide={slide} palette={palette} idx={idx} total={total} onChange={onChange} editable={editable}/>}
+      {showMeta && !externalMeta && slide.template !== 'stickyMobileCover' && (
+        <Meta slide={slide} palette={palette} idx={idx} total={total} onChange={onChange} editable={editable}/>
+      )}
     </div>
   );
 };

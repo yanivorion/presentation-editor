@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { T, EASE, sysFont, glassPanel, glassBar, ctrlBase, Lbl, Field, Row, Sep,
          NumIn, TxtIn, TxtArea, Sel, Sw, TRow, TBtn, Acc, O } from './ui.jsx';
-import { SlideView, SLIDE_W, SLIDE_H, themePalette, SelectionContext, MultiDragContext, useMultiDragBus } from './templates.jsx';
+import { SlideView, SLIDE_W, SLIDE_H, themePalette, Meta, SelectionContext, SelectionSetContext, HiddenTplContext, TplGeometryContext, MultiDragContext, useMultiDragBus } from './templates.jsx';
 import { SEED_DECK, ALL_DIRECTIONS } from './seed.js';
 import ElementsCanvas from './canvas/ElementsCanvas.jsx';
 import ElementToolbar from './panels/ElementToolbar.jsx';
@@ -13,9 +13,29 @@ import { exportPptx, exportJson as exportJsonFile, importJson as importJsonFile 
 
 import { loadDeck as loadFromSupabase, saveDeck as saveToSupabase } from './supabase.js';
 
-const LS_KEY = 'deck_editor_v3';
-const loadDeckLocal = () => { try { const r = localStorage.getItem(LS_KEY); if (r) return JSON.parse(r); } catch {} return null; };
-const saveDeckLocal = (d) => { try { localStorage.setItem(LS_KEY, JSON.stringify(d)); } catch {} };
+const LS_PREFIX = 'deck_editor_';
+const loadDeckLocal = (id) => { try { const r = localStorage.getItem(LS_PREFIX + id); if (r) return JSON.parse(r); } catch {} return null; };
+const saveDeckLocal = (id, d) => { try { localStorage.setItem(LS_PREFIX + id, JSON.stringify(d)); } catch {} };
+
+function newDeckData(title = 'Untitled Presentation') {
+  return {
+    title,
+    slides: [{
+      id: `s_${Date.now()}`,
+      theme: 'white',
+      template: 'twoColumn',
+      fields: { title: 'Welcome', body: 'Start editing this presentation.', panel: { kind: 'bullets', data: ['Point one', 'Point two'] } },
+      meta: { brand: title },
+      elements: [],
+      globalHeader: true,
+      globalFooter: true,
+    }],
+    globalHeader: { elements: [] },
+    globalFooter: { elements: [] },
+    headerEnabled: true,
+    footerEnabled: true,
+  };
+}
 
 // ─── Slide thumbnail in left rail ─────────────────────────────────────────────
 const Thumbnail = ({ slide, idx, total, active, onClick, onDelete, onDuplicate, scale = 0.15 }) => {
@@ -485,6 +505,53 @@ const PropertiesPanel = ({ slide, idx, total, onChange }) => {
         </Section>
       )}
 
+      {/* Spectrum Level (PDF grid layout) */}
+      {slide.template === 'spectrumLevel' && (
+        <Section openSection={openSection} setOpenSection={setOpenSection} id="spectrumLevel" num="03" title="Level grid">
+          <Row><Field label="Level ID"><TxtIn val={f.levelId || 'L0'} onChange={v=>updField('levelId',v)}/></Field></Row>
+          <Row><Field label="Level label"><TxtIn val={f.levelLabel || ''} onChange={v=>updField('levelLabel',v)}/></Field></Row>
+          <Row><Field label="Level name"><TxtIn val={f.levelName || ''} onChange={v=>updField('levelName',v)}/></Field></Row>
+          <Row><Field label="Badge (optional)"><TxtIn val={f.badge || ''} onChange={v=>updField('badge',v)}/></Field></Row>
+          <Row><Field label="Signal"><TxtArea val={f.signal || ''} onChange={v=>updField('signal',v)} rows={2}/></Field></Row>
+          <Row><Field label="Description"><TxtArea val={f.desc || ''} onChange={v=>updField('desc',v)} rows={4}/></Field></Row>
+          <Row><Field label="Markers"><TxtArea val={f.markers || ''} onChange={v=>updField('markers',v)} rows={3}/></Field></Row>
+          <Row><Field label="The tell"><TxtArea val={f.tell || ''} onChange={v=>updField('tell',v)} rows={3}/></Field></Row>
+          <Row>
+            <Field label="3rd col label"><TxtIn val={f.thirdLabel || 'THE WALL'} onChange={v=>updField('thirdLabel',v)}/></Field>
+            <Field label="3rd col value"><TxtArea val={f.thirdValue || ''} onChange={v=>updField('thirdValue',v)} rows={3}/></Field>
+          </Row>
+          <Row><Field label="Diagnostic"><TxtArea val={f.diagnostic || ''} onChange={v=>updField('diagnostic',v)} rows={2}/></Field></Row>
+        </Section>
+      )}
+
+      {/* Spectrum Profile */}
+      {slide.template === 'spectrumProfile' && (
+        <Section openSection={openSection} setOpenSection={setOpenSection} id="spectrumProfile" num="03" title="Profile">
+          <Row><Field label="Quote"><TxtArea val={f.quote || ''} onChange={v=>updField('quote',v)} rows={3}/></Field></Row>
+          <Row><Field label="Highlight words (comma)"><TxtIn val={f.highlightWords || ''} onChange={v=>updField('highlightWords',v)}/></Field></Row>
+          <Row><Field label="Name"><TxtIn val={f.name || ''} onChange={v=>updField('name',v)}/></Field></Row>
+          <Row><Field label="Role"><TxtArea val={f.role || ''} onChange={v=>updField('role',v)} rows={2}/></Field></Row>
+          <Row><Field label="Photo URL"><TxtIn val={f.photoSrc || ''} onChange={v=>updField('photoSrc',v)}/></Field></Row>
+          <Row><Field>
+            <div style={{ fontSize:11, color:T.text3, lineHeight:1.5 }}>
+              Edit grid cells (Portfolio, Press, etc.) directly on the slide canvas.
+            </div>
+          </Field></Row>
+        </Section>
+      )}
+
+      {/* Sticky Mobile Cover */}
+      {slide.template === 'stickyMobileCover' && (
+        <Section openSection={openSection} setOpenSection={setOpenSection} id="stickyCover" num="03" title="Cover">
+          <Row><Field label="Center title"><TxtIn val={f.centerTitle || ''} onChange={v=>updField('centerTitle',v)}/></Field></Row>
+          <Row><Field label="Date"><TxtIn val={f.date || ''} onChange={v=>updField('date',v)}/></Field></Row>
+          <Row>
+            <Field label="Title primary"><TxtIn val={f.titlePrimary || ''} onChange={v=>updField('titlePrimary',v)}/></Field>
+            <Field label="Title secondary"><TxtIn val={f.titleSecondary || ''} onChange={v=>updField('titleSecondary',v)}/></Field>
+          </Row>
+        </Section>
+      )}
+
       <Section openSection={openSection} setOpenSection={setOpenSection} id="meta" num="04" title="Corner meta">
         <Row><Field label="Brand (top-left)"><TxtIn val={slide.meta?.brand || ''} onChange={v=>updMeta('brand',v)}/></Field></Row>
         <Row><Field label="Top-right"><TxtIn val={slide.meta?.tr || ''} onChange={v=>updMeta('tr',v)}/></Field></Row>
@@ -539,13 +606,15 @@ function useUndoable(initial) {
 }
 
 // ─── Main editor ─────────────────────────────────────────────────────────────
-export default function DeckEditor() {
-  const [deck, setDeck, { undo, redo, canUndo, canRedo }] = useUndoable(() => loadDeckLocal() || { title: SEED_DECK.title, slides: SEED_DECK.slides, globalHeader: { elements: [] }, globalFooter: { elements: [] }, headerEnabled: true, footerEnabled: true });
+export default function DeckEditor({ presentationId, onTitleChange }) {
+  const [deck, setDeck, { undo, redo, canUndo, canRedo }] = useUndoable(() => loadDeckLocal(presentationId) || newDeckData());
 
-  // Hydrate from Supabase on mount (overrides localStorage if remote data exists)
+  // Hydrate from Supabase only if no local data exists
   useEffect(() => {
-    loadFromSupabase().then(remote => { if (remote) setDeck(remote); });
-  }, []);
+    if (!loadDeckLocal(presentationId)) {
+      loadFromSupabase(presentationId).then(remote => { if (remote) setDeck(remote); });
+    }
+  }, [presentationId]);
   const [active, setActive] = useState(0);
   const [present, setPresent] = useState(false);
   const [presentIdx, setPresentIdx] = useState(0);
@@ -573,91 +642,12 @@ export default function DeckEditor() {
   deckRef2.current = deck;
 
   useEffect(() => {
-    const handler = (e) => {
-      const mod = e.metaKey || e.ctrlKey;
-
-      if (mod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
-      if (mod && e.key === 'z' && e.shiftKey) { e.preventDefault(); redo(); return; }
-      if (mod && e.key === 'y') { e.preventDefault(); redo(); return; }
-
-      if (mod && e.key === 'c') {
-        if (document.activeElement?.contentEditable === 'true') return;
-        if (selectedIdsRef.current.length === 0) return;
-        e.preventDefault();
-        const curEls = deckRef2.current.slides[activeIdxRef.current]?.elements || [];
-        const copied = curEls.filter(el => selectedIdsRef.current.includes(el.id));
-        clipboardRef.current = copied;
-        const payload = JSON.stringify({ __deckElements: true, elements: copied });
-        navigator.clipboard?.writeText(payload).catch(() => {});
-        return;
-      }
-
-      if (mod && e.key === 'v') {
-        if (document.activeElement?.contentEditable === 'true') return;
-        e.preventDefault();
-        const doLocalPaste = () => {
-          const elements = clipboardRef.current;
-          if (!elements || elements.length === 0) return;
-          pasteElements(elements);
-        };
-        if (navigator.clipboard?.readText) {
-          navigator.clipboard.readText().then(text => {
-            let elements = null;
-            try {
-              const parsed = JSON.parse(text);
-              if (parsed?.__deckElements && Array.isArray(parsed.elements)) {
-                elements = parsed.elements;
-              }
-            } catch {}
-            if (elements && elements.length > 0) {
-              pasteElements(elements);
-            } else {
-              doLocalPaste();
-            }
-          }).catch(() => doLocalPaste());
-        } else {
-          doLocalPaste();
-        }
-        return;
-      }
-
-      if (mod && e.key === 'd') {
-        if (document.activeElement?.contentEditable === 'true') return;
-        e.preventDefault();
-        if (selectedIdsRef.current.length === 0) return;
-        const curEls = deckRef2.current.slides[activeIdxRef.current]?.elements || [];
-        const toDup = curEls.filter(el => selectedIdsRef.current.includes(el.id));
-        const duped = toDup.map(el => ({
-          ...el,
-          id: `el_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          x: el.x + 20,
-          y: el.y + 20,
-        }));
-        setDeck(d => {
-          const ss = d.slides.slice();
-          const slide = ss[activeIdxRef.current];
-          ss[activeIdxRef.current] = { ...slide, elements: [...(slide.elements || []), ...duped] };
-          return { ...d, slides: ss };
-        });
-        setSelectedIds(duped.map(el => el.id));
-        lastActionRef.current = { type: 'duplicate', data: toDup };
-        return;
-      }
-
-      if ((e.key === 'Delete' || e.key === 'Backspace') && !mod) {
-        if (document.activeElement?.contentEditable === 'true') return;
-        if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
-        if (selectedIdsRef.current.length === 0) return;
-        e.preventDefault();
-        setDeck(d => {
-          const ss = d.slides.slice();
-          const slide = ss[activeIdxRef.current];
-          ss[activeIdxRef.current] = { ...slide, elements: (slide.elements || []).filter(el => !selectedIdsRef.current.includes(el.id)) };
-          return { ...d, slides: ss };
-        });
-        setSelectedIds([]);
-        return;
-      }
+    const isEditing = () => {
+      const ae = document.activeElement;
+      if (!ae) return false;
+      if (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA') return true;
+      if (ae.isContentEditable) return true;
+      return false;
     };
 
     const pasteElements = (elements) => {
@@ -677,8 +667,117 @@ export default function DeckEditor() {
       lastActionRef.current = { type: 'paste', data: elements };
     };
 
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    const handler = (e) => {
+      const mod = e.metaKey || e.ctrlKey;
+
+      // Undo/Redo always work regardless of focus
+      if (mod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
+      if (mod && e.key === 'z' && e.shiftKey) { e.preventDefault(); redo(); return; }
+      if (mod && e.key === 'y') { e.preventDefault(); redo(); return; }
+
+      // All other shortcuts require NOT being in a text-editing context
+      if (isEditing()) return;
+
+      if (mod && e.key === 'c') {
+        if (selectedIdsRef.current.length === 0) return;
+        e.preventDefault();
+        const canvasIds = selectedIdsRef.current.filter(id => !id.startsWith('tpl_'));
+        const tplIds = selectedIdsRef.current.filter(id => id.startsWith('tpl_'));
+        const curEls = deckRef2.current.slides[activeIdxRef.current]?.elements || [];
+        const copied = curEls.filter(el => canvasIds.includes(el.id));
+        if (copied.length > 0) {
+          clipboardRef.current = copied;
+        } else if (tplIds.length > 0) {
+          const tplEls = tplIds.map(id => {
+            const node = document.querySelector(`[data-editable-id="${id}"]`);
+            if (!node) return null;
+            const inner = node.querySelector('div, h4, span') || node.firstElementChild || node;
+            const text = inner.innerHTML || inner.innerText || '';
+            const cs = getComputedStyle(inner);
+            const rect = node.getBoundingClientRect();
+            const container = node.closest('[data-slide-scale]');
+            const cRect = container?.getBoundingClientRect();
+            const scale = container ? parseFloat(container.dataset.slideScale) || 1 : 1;
+            const x = cRect ? (rect.left - cRect.left) / scale : 0;
+            const y = cRect ? (rect.top - cRect.top) / scale : 0;
+            return {
+              id: `el_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+              type: 'text', content: text, x, y,
+              w: rect.width / scale, h: rect.height / scale,
+              style: {
+                fontFamily: cs.fontFamily?.split(',')[0]?.replace(/['"]/g, '') || 'Inter',
+                fontSize: parseFloat(cs.fontSize) || 18,
+                fontWeight: parseInt(cs.fontWeight) || 400,
+                fontStyle: cs.fontStyle !== 'normal' ? cs.fontStyle : undefined,
+                color: cs.color || '#1a1a1a',
+                letterSpacing: parseFloat(cs.letterSpacing) || undefined,
+                lineHeight: parseFloat(cs.lineHeight) / parseFloat(cs.fontSize) || 1.4,
+                textAlign: cs.textAlign || 'left',
+              },
+            };
+          }).filter(Boolean);
+          if (tplEls.length > 0) clipboardRef.current = tplEls;
+        }
+        return;
+      }
+
+      if (mod && e.key === 'v') {
+        e.preventDefault();
+        const localElements = clipboardRef.current;
+        if (localElements && localElements.length > 0) {
+          pasteElements(localElements);
+        }
+        return;
+      }
+
+      if (mod && e.key === 'd') {
+        e.preventDefault();
+        if (selectedIdsRef.current.length === 0) return;
+        const canvasIds = selectedIdsRef.current.filter(id => !id.startsWith('tpl_'));
+        if (canvasIds.length === 0) return;
+        const curEls = deckRef2.current.slides[activeIdxRef.current]?.elements || [];
+        const toDup = curEls.filter(el => canvasIds.includes(el.id));
+        const duped = toDup.map(el => ({
+          ...el,
+          id: `el_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          x: el.x + 20,
+          y: el.y + 20,
+        }));
+        setDeck(d => {
+          const ss = d.slides.slice();
+          const slide = ss[activeIdxRef.current];
+          ss[activeIdxRef.current] = { ...slide, elements: [...(slide.elements || []), ...duped] };
+          return { ...d, slides: ss };
+        });
+        setSelectedIds(duped.map(el => el.id));
+        lastActionRef.current = { type: 'duplicate', data: toDup };
+        return;
+      }
+
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !mod) {
+        if (selectedIdsRef.current.length === 0) return;
+        e.preventDefault();
+        const canvasIds = selectedIdsRef.current.filter(id => !id.startsWith('tpl_'));
+        const tplIds = selectedIdsRef.current.filter(id => id.startsWith('tpl_'));
+        setDeck(d => {
+          const ss = d.slides.slice();
+          const slide = { ...ss[activeIdxRef.current] };
+          if (canvasIds.length > 0) {
+            slide.elements = (slide.elements || []).filter(el => !canvasIds.includes(el.id));
+          }
+          if (tplIds.length > 0) {
+            slide.hiddenTplIds = [...(slide.hiddenTplIds || []), ...tplIds];
+          }
+          ss[activeIdxRef.current] = slide;
+          return { ...d, slides: ss };
+        });
+        setSelectedIds([]);
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
   }, [undo, redo, setDeck, setSelectedIds]);
 
   // Cmd+scroll (pinch) to zoom
@@ -698,11 +797,31 @@ export default function DeckEditor() {
 
   // Persist to localStorage + Supabase
   const saveTimerRef = useRef(null);
+  const deckRef3 = useRef(deck);
+  deckRef3.current = deck;
+  const presIdRef = useRef(presentationId);
+  presIdRef.current = presentationId;
   useEffect(() => {
-    saveDeckLocal(deck);
+    saveDeckLocal(presentationId, deck);
+    if (onTitleChange && deck.title) onTitleChange(deck.title);
     clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => { saveToSupabase(deck); }, 1500);
-  }, [deck]);
+    saveTimerRef.current = setTimeout(() => { saveToSupabase(presentationId, deck); }, 1500);
+  }, [deck, presentationId]);
+
+  // Force save on page unload + visibility change
+  useEffect(() => {
+    const forceSave = () => {
+      if (document.activeElement?.blur) document.activeElement.blur();
+      saveDeckLocal(presIdRef.current, deckRef3.current);
+    };
+    const onVisChange = () => { if (document.hidden) forceSave(); };
+    window.addEventListener('beforeunload', forceSave);
+    document.addEventListener('visibilitychange', onVisChange);
+    return () => {
+      window.removeEventListener('beforeunload', forceSave);
+      document.removeEventListener('visibilitychange', onVisChange);
+    };
+  }, []);
 
   // Marquee selection — native events on canvasWrapRef, window move/up for cross-boundary drag
   const scaleRef = useRef(scale);
@@ -736,6 +855,7 @@ export default function DeckEditor() {
       if (e.button !== 0) return;
       const el = e.target;
       if (el.closest('[data-editable-wrap]') || el.closest('[data-canvas-element]') || el.closest('button') || el.closest('[contenteditable]') || el.closest('input') || el.closest('select') || el.closest('textarea')) return;
+      if (document.activeElement?.blur) document.activeElement.blur();
       if (!e.shiftKey) setSelectedIds([]);
       const pt = clientToSlide(e.clientX, e.clientY);
       marqueeRef.current = { startX: pt.x, startY: pt.y };
@@ -928,6 +1048,19 @@ export default function DeckEditor() {
   const curElements = cur?.elements || [];
   const selectedElement = selectedIds.length === 1 ? curElements.find(el => el.id === selectedIds[0]) || null : null;
 
+  // Template geometry persistence
+  const tplGeomCtx = useMemo(() => ({
+    geom: cur?.tplGeometry || {},
+    setGeom: (id, data) => {
+      setDeck(d => {
+        const ss = d.slides.slice();
+        const slide = ss[active];
+        ss[active] = { ...slide, tplGeometry: { ...(slide.tplGeometry || {}), [id]: data } };
+        return { ...d, slides: ss };
+      });
+    },
+  }), [cur?.tplGeometry, active]);
+
   const setElements = useCallback((newElements) => {
     setDeck(d => {
       const ss = d.slides.slice();
@@ -1005,6 +1138,25 @@ export default function DeckEditor() {
     return () => window.removeEventListener('keydown', onKey);
   }, [present, slides.length]);
 
+  // Present mode scale — track viewport, recompute on resize. Computing inline
+  // from window.innerWidth at render time was unreliable on the first paint
+  // (resolved to 0 → invisible slide until you navigated).
+  const [presentScale, setPresentScale] = useState(() =>
+    typeof window !== 'undefined'
+      ? Math.min(window.innerWidth / SLIDE_W, window.innerHeight / SLIDE_H) || 1
+      : 1
+  );
+  useEffect(() => {
+    if (!present) return;
+    const recompute = () => {
+      const s = Math.min(window.innerWidth / SLIDE_W, window.innerHeight / SLIDE_H);
+      if (s > 0 && Number.isFinite(s)) setPresentScale(s);
+    };
+    recompute();
+    window.addEventListener('resize', recompute);
+    return () => window.removeEventListener('resize', recompute);
+  }, [present]);
+
   // Drag-to-reorder thumbnails
   const dragRef = useRef({ from:null });
 
@@ -1021,7 +1173,7 @@ export default function DeckEditor() {
           display:'flex', alignItems:'center', justifyContent:'center',
         }}>
           <div style={{
-            transform: `scale(${Math.min(window.innerWidth/SLIDE_W, window.innerHeight/SLIDE_H)})`,
+            transform: `scale(${presentScale})`,
             transformOrigin: 'center center',
           }}>
             <SlideView slide={ps} idx={presentIdx} total={slides.length} onChange={()=>{}} editable={false}/>
@@ -1058,7 +1210,7 @@ export default function DeckEditor() {
       {/* TOP BAR */}
       <div style={{
         gridArea:'top', ...glassBar, display:'flex', alignItems:'center',
-        padding:'0 16px', gap:12,
+        padding:'0 16px 0 48px', gap:12,
       }}>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           <span style={{
@@ -1236,10 +1388,16 @@ export default function DeckEditor() {
           background:'#fff',
         }}>
           <SelectionContext.Provider value={selectedIds}>
+          <SelectionSetContext.Provider value={setSelectedIds}>
+          <HiddenTplContext.Provider value={cur?.hiddenTplIds || []}>
+          <TplGeometryContext.Provider value={tplGeomCtx}>
           <MultiDragContext.Provider value={multiDragBus}>
             <SlideView slide={cur} idx={active} total={slides.length}
-              onChange={(s)=>setSlide(active, s)} editable={!editingGlobal} scale={scale}/>
+              onChange={(s)=>setSlide(active, s)} editable={!editingGlobal} externalMeta={!editingGlobal} scale={scale}/>
           </MultiDragContext.Provider>
+          </TplGeometryContext.Provider>
+          </HiddenTplContext.Provider>
+          </SelectionSetContext.Provider>
           </SelectionContext.Provider>
 
           {/* Global header elements (readonly when not editing header) */}
@@ -1270,6 +1428,14 @@ export default function DeckEditor() {
               onChange={setElements}
               multiDragBus={multiDragBus}
             />
+          )}
+
+          {/* Meta header/footer rendered on top of everything including dot grid */}
+          {!editingGlobal && (
+            <div style={{ position:'absolute', inset:0, pointerEvents:'none', zIndex:2000 }}>
+              <Meta slide={cur} palette={themePalette(cur.theme)} idx={active} total={slides.length}
+                onChange={(s)=>setSlide(active, s)} editable={true}/>
+            </div>
           )}
 
           {/* Global header/footer editing canvas */}

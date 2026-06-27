@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { GRID_SIZE } from './DotGrid.jsx';
 
 const HANDLE_SIZE = 6;
@@ -38,6 +38,8 @@ export default function CanvasElement({
 }) {
   const interactionRef = useRef(null);
   const wrapperRef = useRef(null);
+  const [contentEditing, setContentEditing] = useState(false);
+  const editingRef = useRef(false);
   const elementRef = useRef(element);
   const scaleRef = useRef(scale);
   const onChangeRef = useRef(onChange);
@@ -56,10 +58,18 @@ export default function CanvasElement({
   useEffect(() => { selectedIdsRef.current = selectedIds; }, [selectedIds]);
   useEffect(() => { onMultiDragRef.current = onMultiDrag; }, [onMultiDrag]);
   useEffect(() => { onAltDragRef.current = onAltDrag; }, [onAltDrag]);
+  useEffect(() => {
+    if (!selected) {
+      editingRef.current = false;
+      setContentEditing(false);
+    }
+  }, [selected]);
 
   useEffect(() => {
     const el = wrapperRef.current;
     if (!el) return;
+    el.__editingRef = editingRef;
+    let lastClickTime = 0;
 
     const onDown = (e) => {
       const elem = elementRef.current;
@@ -67,8 +77,30 @@ export default function CanvasElement({
         onSelectRef.current(elem.id, e.shiftKey);
         return;
       }
+
+      // Already in content-editing mode — let browser handle text interactions
+      if (editingRef.current) {
+        e.stopPropagation();
+        return;
+      }
+
+      const isText = elem.type === 'text' || elem.type === 'title';
+      const isHandle = !!e.target.closest?.('[data-resize-handle]');
+      const now = Date.now();
+      const isDblClick = (now - lastClickTime < 400) && isText && !isHandle;
+      lastClickTime = now;
+
+      // Double-click on selected text: enter editing mode, don't block browser focus
+      if (isDblClick && selectedIdsRef.current.includes(elem.id)) {
+        editingRef.current = true;
+        setContentEditing(true);
+        e.stopPropagation();
+        return;
+      }
+
       e.stopPropagation();
       e.preventDefault();
+      if (document.activeElement?.blur) document.activeElement.blur();
 
       // Alt+drag = duplicate then drag the copy
       if (e.altKey && onAltDragRef.current) {
@@ -83,9 +115,8 @@ export default function CanvasElement({
 
       el.setPointerCapture(e.pointerId);
 
-      const handleEl = e.target.closest?.('[data-resize-handle]');
-      if (handleEl) {
-        const handle = handleEl.dataset.handleDir || 'se';
+      if (isHandle) {
+        const handle = e.target.closest('[data-resize-handle]').dataset.handleDir || 'se';
         interactionRef.current = {
           type: 'resize',
           handle,
@@ -183,6 +214,20 @@ export default function CanvasElement({
   if (element.visible === false) return null;
 
   const { x, y, w, h, rotation = 0, locked } = element;
+  const isText = element.type === 'text' || element.type === 'title';
+
+  const exitEditing = useCallback(() => {
+    editingRef.current = false;
+    setContentEditing(false);
+  }, []);
+
+  const childrenWithProps = isText
+    ? React.Children.map(children, child =>
+        React.isValidElement(child)
+          ? React.cloneElement(child, { contentEditing, onExitEditing: exitEditing })
+          : child
+      )
+    : children;
 
   return (
     <div
@@ -193,23 +238,24 @@ export default function CanvasElement({
         left: x,
         top: y,
         width: w,
-        height: h,
+        minHeight: h,
+        height: isText ? 'auto' : h,
         transform: rotation ? `rotate(${rotation}deg)` : undefined,
         transformOrigin: 'center center',
         outline: selected ? '2px solid #4a90d9' : undefined,
         outlineOffset: 1,
         overflow: 'visible',
-        cursor: locked ? 'default' : 'move',
+        cursor: locked ? 'default' : (contentEditing ? 'text' : 'move'),
         zIndex: element.zIndex || 0,
         opacity: element.style?.opacity ?? 1,
-        userSelect: 'none',
+        userSelect: contentEditing ? 'text' : 'none',
         touchAction: 'none',
         pointerEvents: 'auto',
       }}
     >
-      {children}
+      {childrenWithProps}
 
-      {selected && !locked && HANDLES.map((hName) => {
+      {selected && !locked && !contentEditing && HANDLES.map((hName) => {
         const pos = handlePos(hName, w, h, scale);
         return (
           <div

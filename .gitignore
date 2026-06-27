@@ -12,3 +12,4 @@ base44/.types/
 
 # Local Netlify folder
 .netlify
+build

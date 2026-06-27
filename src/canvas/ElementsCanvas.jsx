@@ -88,14 +88,6 @@ export default function ElementsCanvas({
   const handleKeyDown = useCallback((e) => {
     if (selectedIds.length === 0) return;
 
-    if (e.key === 'Delete' || e.key === 'Backspace') {
-      if (document.activeElement?.contentEditable === 'true') return;
-      e.preventDefault();
-      onChange(elements.filter(el => !selectedIds.includes(el.id)));
-      onSelect([]);
-      return;
-    }
-
     const step = e.shiftKey ? 20 : 1;
     let dx = 0, dy = 0;
     if (e.key === 'ArrowLeft') dx = -step;
@@ -106,7 +98,7 @@ export default function ElementsCanvas({
 
     e.preventDefault();
     handleMultiDrag(dx, dy);
-  }, [selectedIds, elements, handleMultiDrag, onChange, onSelect]);
+  }, [selectedIds, handleMultiDrag]);
 
   const sorted = [...elements].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
 

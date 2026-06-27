@@ -1,29 +1,39 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import { loadFont } from '../useFonts.js';
 
-export default function TextElement({ element, onChange, selected }) {
+export default function TextElement({ element, onChange, selected, contentEditing, onExitEditing }) {
   const ref = useRef(null);
   const style = element.style || {};
-  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     if (style.fontFamily) loadFont(style.fontFamily);
   }, [style.fontFamily]);
 
   useEffect(() => {
-    if (!selected) setEditing(false);
+    if (!selected && contentEditing && onExitEditing) {
+      onExitEditing();
+    }
   }, [selected]);
 
   useEffect(() => {
-    if (!ref.current) return;
-    if (!editing) return;
+    if (!contentEditing || !ref.current) return;
     const next = element.content || '';
     if (ref.current.innerHTML !== next) ref.current.innerHTML = next;
-  }, [element.content, editing]);
+    ref.current.focus();
+    const sel = window.getSelection();
+    sel.selectAllChildren(ref.current);
+    sel.collapseToEnd();
+  }, [contentEditing]);
+
+  const commitEdit = useCallback(() => {
+    if (!ref.current) return;
+    onChange({ ...element, content: ref.current.innerHTML });
+    if (onExitEditing) onExitEditing();
+  }, [element, onChange, onExitEditing]);
 
   const textStyle = {
     width: '100%',
-    height: '100%',
+    minHeight: '100%',
     fontFamily: style.fontFamily || 'Inter',
     fontSize: style.fontSize || (element.type === 'title' ? 48 : 18),
     fontWeight: style.fontWeight || (element.type === 'title' ? 700 : 400),
@@ -36,22 +46,17 @@ export default function TextElement({ element, onChange, selected }) {
     backgroundColor: style.backgroundColor || 'transparent',
     border: 'none',
     outline: 'none',
-    overflow: 'hidden',
+    overflow: 'visible',
     padding: 4,
     boxSizing: 'border-box',
     wordWrap: 'break-word',
-    cursor: editing ? 'text' : 'inherit',
-    pointerEvents: editing ? 'auto' : 'none',
+    overflowWrap: 'break-word',
   };
 
-  if (!editing) {
+  if (!contentEditing) {
     return (
       <div
-        style={textStyle}
-        onDoubleClick={(e) => {
-          e.stopPropagation();
-          setEditing(true);
-        }}
+        style={{ ...textStyle, cursor: 'inherit', pointerEvents: 'none', userSelect: 'none' }}
         dangerouslySetInnerHTML={{ __html: element.content || '' }}
       />
     );
@@ -62,14 +67,19 @@ export default function TextElement({ element, onChange, selected }) {
       ref={ref}
       contentEditable
       suppressContentEditableWarning
-      onBlur={(e) => {
-        onChange({ ...element, content: e.currentTarget.innerHTML });
-        setEditing(false);
+      onBlur={commitEdit}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          ref.current?.blur();
+          return;
+        }
+        e.stopPropagation();
       }}
       onPointerDown={(e) => {
         e.stopPropagation();
       }}
-      style={textStyle}
+      style={{ ...textStyle, cursor: 'text', pointerEvents: 'auto', userSelect: 'text' }}
     />
   );
 }
